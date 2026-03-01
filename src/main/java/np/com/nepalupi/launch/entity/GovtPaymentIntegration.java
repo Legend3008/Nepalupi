@@ -7,6 +7,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -23,9 +24,6 @@ public class GovtPaymentIntegration {
     @Column(name = "agency_name", nullable = false)
     private String agencyName;
 
-    @Column(name = "agency_code", nullable = false, unique = true)
-    private String agencyCode;
-
     @Column(name = "payment_type", nullable = false)
     private String paymentType;
 
@@ -34,26 +32,29 @@ public class GovtPaymentIntegration {
     @Builder.Default
     private GovtIntegrationStatus integrationStatus = GovtIntegrationStatus.IDENTIFIED;
 
-    @Column(name = "estimated_annual_volume_paisa")
-    private Long estimatedAnnualVolumePaisa;
+    @Column(name = "contact_person")
+    private String contactPerson;
 
-    @Column(name = "estimated_annual_txn_count")
-    private Long estimatedAnnualTxnCount;
+    @Column(name = "contact_email")
+    private String contactEmail;
 
-    @Column(name = "technical_contact")
-    private String technicalContact;
+    @Builder.Default
+    @Column(name = "estimated_monthly_volume")
+    private Long estimatedMonthlyVolume = 0L;
 
-    @Column(name = "mou_signed_at")
-    private Instant mouSignedAt;
+    @Builder.Default
+    @Column(name = "estimated_monthly_amount_paisa")
+    private Long estimatedMonthlyAmountPaisa = 0L;
 
-    @Column(name = "integration_started_at")
-    private Instant integrationStartedAt;
+    @Column(name = "agreement_signed_at")
+    private Instant agreementSignedAt;
 
-    @Column(name = "uat_completed_at")
-    private Instant uatCompletedAt;
+    @Column(name = "go_live_date")
+    private LocalDate goLiveDate;
 
-    @Column(name = "live_at")
-    private Instant liveAt;
+    @Builder.Default
+    @Column(name = "actual_monthly_volume")
+    private Long actualMonthlyVolume = 0L;
 
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;

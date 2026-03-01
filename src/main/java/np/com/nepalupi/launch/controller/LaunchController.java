@@ -177,19 +177,17 @@ public class LaunchController {
     @PostMapping("/govt")
     public ResponseEntity<GovtPaymentIntegration> identifyAgency(
             @RequestParam String agencyName,
-            @RequestParam String agencyCode,
             @RequestParam String paymentType,
-            @RequestParam(required = false) Long estimatedAnnualVolumePaisa,
-            @RequestParam(required = false) Long estimatedAnnualTxnCount) {
+            @RequestParam(required = false) String contactPerson,
+            @RequestParam(required = false) String contactEmail,
+            @RequestParam(required = false) Long estimatedMonthlyVolume) {
         return ResponseEntity.ok(govtPaymentIntegrationService.identifyAgency(
-                agencyName, agencyCode, paymentType, estimatedAnnualVolumePaisa, estimatedAnnualTxnCount));
+                agencyName, paymentType, contactPerson, contactEmail, estimatedMonthlyVolume));
     }
 
-    @PostMapping("/govt/{id}/sign-mou")
-    public ResponseEntity<GovtPaymentIntegration> signMou(
-            @PathVariable UUID id,
-            @RequestParam String technicalContact) {
-        return ResponseEntity.ok(govtPaymentIntegrationService.signMou(id, technicalContact));
+    @PostMapping("/govt/{id}/sign-agreement")
+    public ResponseEntity<GovtPaymentIntegration> signAgreement(@PathVariable UUID id) {
+        return ResponseEntity.ok(govtPaymentIntegrationService.signAgreement(id));
     }
 
     @PostMapping("/govt/{id}/start-integration")

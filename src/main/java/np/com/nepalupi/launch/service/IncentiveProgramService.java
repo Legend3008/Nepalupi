@@ -30,12 +30,12 @@ public class IncentiveProgramService {
         IncentiveProgram program = findById(programId);
 
         if (!program.getIsActive()) {
-            throw new IllegalStateException("Program " + program.getProgramCode() + " is not active");
+            throw new IllegalStateException("Program " + program.getProgramName() + " is not active");
         }
 
         long newSpent = program.getSpentPaisa() + amountPaisa;
         if (newSpent > program.getBudgetPaisa()) {
-            throw new IllegalStateException("Redemption would exceed budget for program " + program.getProgramCode());
+            throw new IllegalStateException("Redemption would exceed budget for program " + program.getProgramName());
         }
 
         program.setSpentPaisa(newSpent);
@@ -44,7 +44,7 @@ public class IncentiveProgramService {
         // Check if budget is 90%+ exhausted
         double utilization = (double) newSpent / program.getBudgetPaisa() * 100;
         if (utilization >= 90) {
-            log.warn("Incentive program {} is {}% utilized", program.getProgramCode(), String.format("%.1f", utilization));
+            log.warn("Incentive program {} is {}% utilized", program.getProgramName(), String.format("%.1f", utilization));
         }
 
         return incentiveProgramRepository.save(program);
@@ -54,7 +54,7 @@ public class IncentiveProgramService {
     public IncentiveProgram deactivateProgram(UUID programId) {
         IncentiveProgram program = findById(programId);
         program.setIsActive(false);
-        log.info("Deactivated incentive program: {}", program.getProgramCode());
+        log.info("Deactivated incentive program: {}", program.getProgramName());
         return incentiveProgramRepository.save(program);
     }
 
@@ -81,14 +81,14 @@ public class IncentiveProgramService {
         for (IncentiveProgram program : exhausted) {
             program.setIsActive(false);
             incentiveProgramRepository.save(program);
-            log.info("Auto-deactivated exhausted program: {}", program.getProgramCode());
+            log.info("Auto-deactivated exhausted program: {}", program.getProgramName());
         }
 
         List<IncentiveProgram> expired = incentiveProgramRepository.findExpiredButActivePrograms();
         for (IncentiveProgram program : expired) {
             program.setIsActive(false);
             incentiveProgramRepository.save(program);
-            log.info("Auto-deactivated expired program: {}", program.getProgramCode());
+            log.info("Auto-deactivated expired program: {}", program.getProgramName());
         }
 
         if (!exhausted.isEmpty() || !expired.isEmpty()) {

@@ -20,16 +20,16 @@ public class GovtPaymentIntegrationService {
     private final GovtPaymentIntegrationRepository govtPaymentIntegrationRepository;
 
     @Transactional
-    public GovtPaymentIntegration identifyAgency(String agencyName, String agencyCode,
-                                                  String paymentType, Long estimatedAnnualVolumePaisa,
-                                                  Long estimatedAnnualTxnCount) {
+    public GovtPaymentIntegration identifyAgency(String agencyName, String paymentType,
+                                                  String contactPerson, String contactEmail,
+                                                  Long estimatedMonthlyVolume) {
         GovtPaymentIntegration integration = GovtPaymentIntegration.builder()
                 .agencyName(agencyName)
-                .agencyCode(agencyCode)
                 .paymentType(paymentType)
                 .integrationStatus(GovtIntegrationStatus.IDENTIFIED)
-                .estimatedAnnualVolumePaisa(estimatedAnnualVolumePaisa)
-                .estimatedAnnualTxnCount(estimatedAnnualTxnCount)
+                .contactPerson(contactPerson)
+                .contactEmail(contactEmail)
+                .estimatedMonthlyVolume(estimatedMonthlyVolume != null ? estimatedMonthlyVolume : 0L)
                 .build();
 
         log.info("Identified govt agency for UPI integration: {} ({})", agencyName, paymentType);
@@ -37,12 +37,11 @@ public class GovtPaymentIntegrationService {
     }
 
     @Transactional
-    public GovtPaymentIntegration signMou(UUID integrationId, String technicalContact) {
+    public GovtPaymentIntegration signAgreement(UUID integrationId) {
         GovtPaymentIntegration integration = findById(integrationId);
         integration.setIntegrationStatus(GovtIntegrationStatus.AGREEMENT_SIGNED);
-        integration.setMouSignedAt(Instant.now());
-        integration.setTechnicalContact(technicalContact);
-        log.info("MOU signed with govt agency: {}", integration.getAgencyName());
+        integration.setAgreementSignedAt(Instant.now());
+        log.info("Agreement signed with govt agency: {}", integration.getAgencyName());
         return govtPaymentIntegrationRepository.save(integration);
     }
 
@@ -50,7 +49,6 @@ public class GovtPaymentIntegrationService {
     public GovtPaymentIntegration startIntegration(UUID integrationId) {
         GovtPaymentIntegration integration = findById(integrationId);
         integration.setIntegrationStatus(GovtIntegrationStatus.DEVELOPMENT);
-        integration.setIntegrationStartedAt(Instant.now());
         log.info("Integration started with govt agency: {}", integration.getAgencyName());
         return govtPaymentIntegrationRepository.save(integration);
     }
@@ -59,7 +57,6 @@ public class GovtPaymentIntegrationService {
     public GovtPaymentIntegration completeUat(UUID integrationId) {
         GovtPaymentIntegration integration = findById(integrationId);
         integration.setIntegrationStatus(GovtIntegrationStatus.TESTING);
-        integration.setUatCompletedAt(Instant.now());
         log.info("UAT completed for govt agency: {}", integration.getAgencyName());
         return govtPaymentIntegrationRepository.save(integration);
     }
@@ -68,7 +65,7 @@ public class GovtPaymentIntegrationService {
     public GovtPaymentIntegration goLive(UUID integrationId) {
         GovtPaymentIntegration integration = findById(integrationId);
         integration.setIntegrationStatus(GovtIntegrationStatus.LIVE);
-        integration.setLiveAt(Instant.now());
+        integration.setGoLiveDate(java.time.LocalDate.now());
         log.info("Govt payment integration LIVE: {}", integration.getAgencyName());
         return govtPaymentIntegrationRepository.save(integration);
     }

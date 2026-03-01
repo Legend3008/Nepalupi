@@ -6,8 +6,8 @@ import np.com.nepalupi.launch.enums.IncentiveProgramType;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -21,55 +21,52 @@ public class IncentiveProgram {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Column(name = "psp_id")
+    private String pspId;
+
     @Column(name = "program_name", nullable = false)
     private String programName;
-
-    @Column(name = "program_code", nullable = false, unique = true)
-    private String programCode;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "program_type", nullable = false)
     private IncentiveProgramType programType;
 
-    @Column(name = "psp_id")
-    private String pspId;
+    @Column(name = "start_date", nullable = false)
+    private LocalDate startDate;
 
-    @Column(name = "budget_paisa", nullable = false)
-    private Long budgetPaisa;
+    @Column(name = "end_date")
+    private LocalDate endDate;
+
+    @Builder.Default
+    @Column(name = "budget_paisa")
+    private Long budgetPaisa = 0L;
 
     @Builder.Default
     @Column(name = "spent_paisa")
     private Long spentPaisa = 0L;
 
-    @Column(name = "per_user_limit_paisa")
-    private Long perUserLimitPaisa;
+    @Builder.Default
+    @Column(name = "max_per_user_paisa")
+    private Long maxPerUserPaisa = 0L;
 
-    @Column(name = "per_txn_limit_paisa")
-    private Long perTxnLimitPaisa;
+    @Builder.Default
+    @Column(name = "max_per_txn_paisa")
+    private Long maxPerTxnPaisa = 0L;
 
+    @Column(name = "eligible_txn_types")
+    private String eligibleTxnTypes;
+
+    @Builder.Default
     @Column(name = "min_txn_amount_paisa")
-    private Long minTxnAmountPaisa;
+    private Long minTxnAmountPaisa = 0L;
 
-    @Column(name = "cashback_percentage", precision = 5, scale = 2)
-    private BigDecimal cashbackPercentage;
-
-    @Column(name = "start_date", nullable = false)
-    private Instant startDate;
-
-    @Column(name = "end_date", nullable = false)
-    private Instant endDate;
+    @Builder.Default
+    @Column(name = "total_redemptions")
+    private Long totalRedemptions = 0L;
 
     @Builder.Default
     @Column(name = "is_active")
     private Boolean isActive = true;
-
-    @Builder.Default
-    @Column(name = "total_redemptions")
-    private Integer totalRedemptions = 0;
-
-    @Builder.Default
-    @Column(name = "unique_users")
-    private Integer uniqueUsers = 0;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

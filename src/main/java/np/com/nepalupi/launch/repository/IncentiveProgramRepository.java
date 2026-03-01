@@ -7,13 +7,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface IncentiveProgramRepository extends JpaRepository<IncentiveProgram, UUID> {
-
-    Optional<IncentiveProgram> findByProgramCode(String programCode);
 
     List<IncentiveProgram> findByProgramType(IncentiveProgramType programType);
 
@@ -24,6 +21,6 @@ public interface IncentiveProgramRepository extends JpaRepository<IncentiveProgr
     @Query("SELECT p FROM IncentiveProgram p WHERE p.isActive = true AND p.spentPaisa >= p.budgetPaisa")
     List<IncentiveProgram> findExhaustedPrograms();
 
-    @Query("SELECT p FROM IncentiveProgram p WHERE p.isActive = true AND p.endDate < CURRENT_TIMESTAMP")
+    @Query("SELECT p FROM IncentiveProgram p WHERE p.isActive = true AND p.endDate < CURRENT_DATE")
     List<IncentiveProgram> findExpiredButActivePrograms();
 }

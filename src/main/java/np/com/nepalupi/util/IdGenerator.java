@@ -1,5 +1,7 @@
 package np.com.nepalupi.util;
 
+import org.springframework.stereotype.Component;
+
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -13,16 +15,14 @@ import java.util.UUID;
  * - UPI Txn ID:  NPL + yyyyMMddHHmmss + 12-char random hex  (35 chars)
  * - RRN:         yyDDD + 7-digit sequence (12 chars, like NPCI's RRN)
  */
-public final class IdGenerator {
+@Component
+public class IdGenerator {
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final DateTimeFormatter TXN_ID_FMT =
             DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("Asia/Kathmandu"));
     private static final DateTimeFormatter RRN_FMT =
             DateTimeFormatter.ofPattern("yyDDD").withZone(ZoneId.of("Asia/Kathmandu"));
-
-    private IdGenerator() {
-    }
 
     /**
      * Generate a globally unique UPI transaction ID.
