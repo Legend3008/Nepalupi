@@ -1,0 +1,82 @@
+version: '3.9'
+
+# ═══════════════════════════════════════════════════════════════
+# Nepal UPI — Local Development Infrastructure
+# ═══════════════════════════════════════════════════════════════
+# Usage:
+#   docker-compose up -d          ← Start all infra
+#   docker-compose logs -f        ← Watch logs
+#   docker-compose down -v        ← Stop and clean volumes
+# ═══════════════════════════════════════════════════════════════
+
+services:
+
+  # ── PostgreSQL (Primary) ────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: nepalupi-postgres
+    environment:
+      POSTGRES_DB: nepalupi
+      POSTGRES_USER: nepalupi
+      POSTGRES_PASSWORD: changeme
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nepalupi"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ───────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: nepalupi-redis
+    ports:
+      - "6380:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Apache Kafka (KRaft mode — no ZooKeeper) ────────────────
+  # Same as Indian UPI / NPCI infrastructure
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: nepalupi-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    ports:
+      - "9092:9092"
+
+  # ── Kafka UI (optional — monitoring) ───────────────────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: nepalupi-kafka-ui
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: nepal-upi
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on:
+      - kafka
+
+volumes:
+  postgres_data:
+  redis_data:
