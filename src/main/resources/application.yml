@@ -8,7 +8,7 @@ spring:
 
   # ── PostgreSQL ──────────────────────────────────────────────
   datasource:
-    url: jdbc:postgresql://localhost:5433/nepalupi
+    url: jdbc:postgresql://localhost:5433/nepalupi?stringtype=unspecified
     username: nepalupi
     password: ${DB_PASSWORD:changeme}
     hikari:

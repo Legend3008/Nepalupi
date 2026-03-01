@@ -2,10 +2,14 @@ package np.com.nepalupi.domain.dto.response;
 
 import lombok.*;
 
+import java.io.Serializable;
+
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
 @Builder
-public class VpaDetails {
+public class VpaDetails implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private String vpaAddress;
     private String bankCode;

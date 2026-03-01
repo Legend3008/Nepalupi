@@ -93,7 +93,7 @@ public class Transaction {
     @Column(name = "device_fingerprint")
     private String deviceFingerprint;
 
-    @Column(name = "ip_address", columnDefinition = "inet")
+    @Column(name = "ip_address")
     private String ipAddress;
 
     private String note;
