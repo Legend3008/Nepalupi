@@ -86,6 +86,9 @@ public class Psp {
     @Column(name = "webhook_signing_secret", length = 200)
     private String webhookSigningSecret;
 
+    @Column(name = "sponsor_bank_code", length = 20)
+    private String sponsorBankCode;
+
     @Column(name = "suspension_reason", length = 500)
     private String suspensionReason;
 

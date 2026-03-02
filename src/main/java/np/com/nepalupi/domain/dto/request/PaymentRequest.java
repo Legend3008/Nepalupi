@@ -26,6 +26,12 @@ public class PaymentRequest {
 
     private String ipAddress;
 
+    /** User's MPIN — encrypted with bank's public key before transmission */
+    private String pin;
+
+    /** Transaction category for NRB category-based limits (P2P, P2M, BILL_PAYMENT, etc.) */
+    private String category;
+
     // Set by the controller from request headers
     private String pspId;
     private String idempotencyKey;

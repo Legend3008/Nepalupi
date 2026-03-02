@@ -15,6 +15,7 @@ import np.com.nepalupi.repository.TransactionRepository;
 import np.com.nepalupi.service.bank.BankConnector;
 import np.com.nepalupi.service.fraud.FraudEngine;
 import np.com.nepalupi.service.notification.TransactionEventPublisher;
+import np.com.nepalupi.service.pin.PinEncryptionService;
 import np.com.nepalupi.service.vpa.VpaResolutionService;
 import np.com.nepalupi.util.IdGenerator;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,6 +53,7 @@ public class TransactionOrchestrator {
     private final ReversalService reversalService;
     private final TransactionEventPublisher eventPublisher;
     private final TransactionMetrics metrics;
+    private final PinEncryptionService pinEncryptionService;
 
     @Value("${nepalupi.transaction.expiry-minutes:10}")
     private int expiryMinutes;
@@ -107,8 +109,20 @@ public class TransactionOrchestrator {
         fraudEngine.assess(payerVpa.getUserId(), request.getAmount(), txn.getId(),
                 request.getDeviceFingerprint(), request.getPayeeVpa());
 
-        // ── Step 6: Transition to DEBIT_PENDING ──────────────
-        // (In full UPI, user enters PIN here — PIN encrypted with bank's key via HSM)
+        // ── Step 6: MPIN encryption ─────────────────────────
+        // User's MPIN is encrypted with the payer bank's public key.
+        // The encrypted PIN is sent alongside the debit request.
+        // Only the bank's HSM can decrypt it.
+        String encryptedPin = null;
+        if (request.getPin() != null && !request.getPin().isBlank()) {
+            encryptedPin = pinEncryptionService.encryptPin(
+                    request.getPin(), payerVpa.getBankCode());
+            log.debug("MPIN encrypted for bank {} on txn {}", payerVpa.getBankCode(), txn.getUpiTxnId());
+        } else {
+            log.warn("No MPIN provided for txn {} — in production this would be rejected",
+                    txn.getUpiTxnId());
+        }
+
         stateMachine.transition(txn, TransactionStatus.DEBIT_PENDING);
         txnRepo.save(txn);
 

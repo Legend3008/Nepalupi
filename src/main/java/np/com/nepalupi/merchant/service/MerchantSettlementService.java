@@ -30,7 +30,8 @@ import java.util.UUID;
  * Merchant Settlement Service — daily settlement cycle.
  * <p>
  * Indian UPI model:
- * - Zero MDR for P2P and small merchant transactions (below Rs 2,000)
+ * - Zero MDR for all P2M transactions ≤ Rs 2,000 (NRB/RBI mandate)
+ * - Large merchants: 0.30% MDR above Rs 2,000 threshold
  * - T+0 (same day) or T+1 (next business day) settlement
  * - Settlement runs as a batch job — aggregates all transactions per merchant
  *   per day, deducts MDR, credits net amount to settlement account
@@ -177,8 +178,19 @@ public class MerchantSettlementService {
                 .count();
     }
 
+    /**
+     * Zero MDR threshold — NRB mandate: zero MDR for all P2M transactions
+     * where individual transaction amount ≤ Rs 2,000.
+     * Only amounts above this threshold attract MDR.
+     */
+    private static final long ZERO_MDR_THRESHOLD_PAISA = 200000L; // Rs 2,000
+
     private long calculateMdr(long totalAmountPaisa, BigDecimal mdrPercent) {
         if (mdrPercent == null || mdrPercent.compareTo(BigDecimal.ZERO) == 0) {
+            return 0L;
+        }
+        // Zero MDR for P2M transactions ≤ Rs 2,000 (NRB/RBI mandate)
+        if (totalAmountPaisa <= ZERO_MDR_THRESHOLD_PAISA) {
             return 0L;
         }
         return BigDecimal.valueOf(totalAmountPaisa)

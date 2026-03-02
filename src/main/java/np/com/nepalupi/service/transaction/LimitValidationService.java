@@ -2,14 +2,17 @@ package np.com.nepalupi.service.transaction;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import np.com.nepalupi.domain.entity.CategoryTransactionLimit;
 import np.com.nepalupi.domain.entity.DailyTransactionStats;
 import np.com.nepalupi.exception.LimitExceededException;
+import np.com.nepalupi.repository.CategoryTransactionLimitRepository;
 import np.com.nepalupi.repository.DailyTransactionStatsRepository;
 import np.com.nepalupi.service.fraud.FraudEngine;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -26,6 +29,7 @@ import java.util.UUID;
 public class LimitValidationService {
 
     private final DailyTransactionStatsRepository statsRepo;
+    private final CategoryTransactionLimitRepository categoryLimitRepo;
     private final FraudEngine fraudEngine;
 
     @Value("${nepalupi.transaction.per-txn-limit-paisa:10000000}")
@@ -39,17 +43,46 @@ public class LimitValidationService {
 
     /**
      * Validate that the requested amount does not breach any limits.
+     * Uses category-based NRB limits if a category is specified,
+     * otherwise falls back to default flat limits.
      *
      * @param userId      the user initiating the payment
      * @param amountPaisa the transaction amount in paisa
      * @throws LimitExceededException if any limit is breached
      */
     public void validate(UUID userId, Long amountPaisa) {
+        validate(userId, amountPaisa, null);
+    }
+
+    /**
+     * Validate with category-based NRB limits.
+     *
+     * @param userId      the user initiating the payment
+     * @param amountPaisa the transaction amount in paisa
+     * @param category    transaction category (P2P, P2M, BILL_PAYMENT, etc.) — nullable
+     * @throws LimitExceededException if any limit is breached
+     */
+    public void validate(UUID userId, Long amountPaisa, String category) {
+        // Resolve effective limits: category-specific if available, else default
+        Long effectivePerTxnLimit = perTransactionLimit;
+        Long effectiveDailyLimit = dailyLimit;
+
+        if (category != null && !category.isBlank()) {
+            Optional<CategoryTransactionLimit> catLimit = categoryLimitRepo
+                    .findActiveByCategory(category, LocalDate.now());
+            if (catLimit.isPresent()) {
+                effectivePerTxnLimit = catLimit.get().getPerTxnLimitPaisa();
+                effectiveDailyLimit = catLimit.get().getDailyLimitPaisa();
+                log.debug("Using category '{}' limits: perTxn={}, daily={}",
+                        category, effectivePerTxnLimit, effectiveDailyLimit);
+            }
+        }
+
         // 1. Per-transaction limit
-        if (amountPaisa > perTransactionLimit) {
+        if (amountPaisa > effectivePerTxnLimit) {
             throw new LimitExceededException(
-                    String.format("Amount %d paisa exceeds per-transaction limit of %d paisa",
-                            amountPaisa, perTransactionLimit));
+                    String.format("Amount %d paisa exceeds per-transaction limit of %d paisa (category=%s)",
+                            amountPaisa, effectivePerTxnLimit, category != null ? category : "DEFAULT"));
         }
 
         // 2. Daily aggregate amount & count
@@ -61,10 +94,10 @@ public class LimitValidationService {
                         .transactionCount(0)
                         .build());
 
-        if (stats.getTotalAmountPaisa() + amountPaisa > dailyLimit) {
+        if (stats.getTotalAmountPaisa() + amountPaisa > effectiveDailyLimit) {
             throw new LimitExceededException(
                     String.format("Daily aggregate limit exceeded. Used: %d paisa, Requested: %d paisa, Limit: %d paisa",
-                            stats.getTotalAmountPaisa(), amountPaisa, dailyLimit));
+                            stats.getTotalAmountPaisa(), amountPaisa, effectiveDailyLimit));
         }
 
         if (stats.getTransactionCount() >= dailyCountLimit) {
