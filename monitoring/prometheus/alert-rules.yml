@@ -1,0 +1,169 @@
+# Nepal UPI (NPI) Prometheus Alerting Rules
+# Section 18.4: Alert conditions for NPI Switch
+
+groups:
+  - name: npi_transaction_alerts
+    rules:
+      # P1: Transaction success rate below 95%
+      - alert: TransactionSuccessRateLow
+        expr: |
+          (
+            sum(rate(upi_transaction_total{status="SUCCESS"}[5m]))
+            /
+            sum(rate(upi_transaction_total[5m]))
+          ) * 100 < 95
+        for: 2m
+        labels:
+          severity: P1
+          team: npi-payments
+        annotations:
+          summary: "NPI transaction success rate below 95%"
+          description: "Success rate is {{ $value | printf \"%.2f\" }}% (threshold: 95%). SLO breach imminent."
+          runbook: "https://runbooks.npi.np/transaction-success-rate"
+
+      # P1: Circuit breaker OPEN for any bank
+      - alert: BankCircuitBreakerOpen
+        expr: upi_circuit_breakers_open > 0
+        for: 30s
+        labels:
+          severity: P1
+          team: npi-banking
+        annotations:
+          summary: "Bank circuit breaker(s) in OPEN state"
+          description: "{{ $value }} bank circuit breaker(s) are OPEN. Bank connectivity degraded."
+          runbook: "https://runbooks.npi.np/circuit-breaker-open"
+
+      # P2: P99 latency above 5 seconds
+      - alert: TransactionLatencyHigh
+        expr: histogram_quantile(0.99, rate(upi_transaction_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: P2
+          team: npi-payments
+        annotations:
+          summary: "NPI P99 transaction latency above 5s"
+          description: "P99 latency is {{ $value | printf \"%.2f\" }}s (threshold: 5s)."
+          runbook: "https://runbooks.npi.np/high-latency"
+
+      # P2: DLQ depth exceeds threshold
+      - alert: DlqDepthHigh
+        expr: upi_dlq_depth > 1000
+        for: 5m
+        labels:
+          severity: P2
+          team: npi-platform
+        annotations:
+          summary: "Dead letter queue depth exceeds 1000"
+          description: "DLQ has {{ $value }} pending events. Possible processing failure."
+          runbook: "https://runbooks.npi.np/dlq-high"
+
+  - name: npi_settlement_alerts
+    rules:
+      # P1: Settlement file generation failure
+      - alert: SettlementFileGenerationFailed
+        expr: increase(settlement_file_generation_failures_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: P1
+          team: npi-settlement
+        annotations:
+          summary: "Settlement file generation failed"
+          description: "Settlement file generation has failed. Manual intervention required."
+          runbook: "https://runbooks.npi.np/settlement-failure"
+
+      # P1: Settlement mismatch detected
+      - alert: SettlementMismatch
+        expr: settlement_mismatch_count > 0
+        for: 1m
+        labels:
+          severity: P1
+          team: npi-settlement
+        annotations:
+          summary: "Settlement amount mismatch detected"
+          description: "{{ $value }} mismatches found in settlement reconciliation."
+          runbook: "https://runbooks.npi.np/settlement-mismatch"
+
+  - name: npi_infrastructure_alerts
+    rules:
+      # P1: Application down
+      - alert: NpiApplicationDown
+        expr: up{job="nepal-upi-switch"} == 0
+        for: 30s
+        labels:
+          severity: P1
+          team: npi-sre
+        annotations:
+          summary: "NPI application instance is DOWN"
+          description: "Instance {{ $labels.instance }} is not responding."
+          runbook: "https://runbooks.npi.np/app-down"
+
+      # P2: JVM heap usage above 85%
+      - alert: JvmHeapUsageHigh
+        expr: |
+          jvm_memory_used_bytes{area="heap"}
+          /
+          jvm_memory_max_bytes{area="heap"} * 100 > 85
+        for: 5m
+        labels:
+          severity: P2
+          team: npi-sre
+        annotations:
+          summary: "JVM heap usage above 85%"
+          description: "Heap usage is {{ $value | printf \"%.1f\" }}%. Consider scaling or tuning GC."
+
+      # P2: Database connection pool exhaustion
+      - alert: DbConnectionPoolExhausted
+        expr: hikaricp_connections_active / hikaricp_connections_max * 100 > 90
+        for: 2m
+        labels:
+          severity: P2
+          team: npi-sre
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "Pool utilization is {{ $value | printf \"%.1f\" }}%."
+
+      # P2: Redis connection failure
+      - alert: RedisConnectionFailure
+        expr: increase(redis_connection_errors_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: P2
+          team: npi-platform
+        annotations:
+          summary: "Redis connection errors increasing"
+          description: "{{ $value }} Redis connection errors in last 5 minutes."
+
+      # P2: Kafka consumer lag high
+      - alert: KafkaConsumerLagHigh
+        expr: kafka_consumer_lag_max > 10000
+        for: 5m
+        labels:
+          severity: P2
+          team: npi-platform
+        annotations:
+          summary: "Kafka consumer lag exceeds 10000"
+          description: "Consumer group {{ $labels.consumer_group }} lag is {{ $value }}."
+
+  - name: npi_security_alerts
+    rules:
+      # P1: Rate limiting triggered excessively
+      - alert: RateLimitingExcessive
+        expr: rate(rate_limit_exceeded_total[5m]) > 100
+        for: 2m
+        labels:
+          severity: P1
+          team: npi-security
+        annotations:
+          summary: "Excessive rate limiting — possible DDoS"
+          description: "Rate limiting triggered {{ $value | printf \"%.0f\" }} times/sec."
+
+      # P2: MPIN lockout rate high
+      - alert: MpinLockoutRateHigh
+        expr: increase(mpin_lockout_total[1h]) > 50
+        for: 5m
+        labels:
+          severity: P2
+          team: npi-security
+        annotations:
+          summary: "High MPIN lockout rate"
+          description: "{{ $value }} MPIN lockouts in the last hour. Possible brute force."

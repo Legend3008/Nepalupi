@@ -22,7 +22,8 @@ class RateLimitingFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new RateLimitingFilter();
+        // Pass null StringRedisTemplate → triggers in-memory fallback mode
+        filter = new RateLimitingFilter(null);
         filterChain = mock(FilterChain.class);
     }
 

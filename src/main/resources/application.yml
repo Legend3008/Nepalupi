@@ -107,7 +107,8 @@ nepalupi:
     daily-limit-paisa: 20000000        # Rs 2,00,000 (2 lakh)
     daily-count-limit: 20
   settlement:
-    cron: "0 59 23 * * *"              # 11:59 PM daily
+    cron: "0 59 23 * * *"              # 11:59 PM daily EOD
+    hourly-cron: "0 0 * * * *"          # Hourly batches (Section 3.5)
   psp:
     request-expiry-seconds: 300        # 5 minutes replay window
   security:
@@ -119,6 +120,28 @@ nepalupi:
       notification-events: notification-events
       audit-events: audit-events
 
+# ── Production Profile (Section 3.2 / 3.4) ───────────────────
+# Activate with: --spring.profiles.active=production
+---
+spring:
+  config:
+    activate:
+      on-profile: production
+  # mTLS configuration (Section 3.2)
+  # server:
+  #   ssl:
+  #     enabled: true
+  #     key-store: classpath:keystore.p12
+  #     key-store-password: ${KEYSTORE_PASSWORD}
+  #     key-store-type: PKCS12
+  #     trust-store: classpath:truststore.p12
+  #     trust-store-password: ${TRUSTSTORE_PASSWORD}
+  #     client-auth: need  # Enforce mTLS for PSP connections
+nepalupi:
+  security:
+    hmac-enabled: true
+
+---
 # ── OpenAPI / Swagger ─────────────────────────────────────────
 springdoc:
   api-docs:

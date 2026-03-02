@@ -12,6 +12,7 @@ import np.com.nepalupi.repository.TransactionRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.nio.file.Path;
 import java.time.*;
 import java.util.HashMap;
 import java.util.List;
@@ -46,8 +47,44 @@ public class SettlementEngine {
     private final TransactionRepository txnRepo;
     private final SettlementReportRepository settlementRepo;
     private final ObjectMapper objectMapper;
+    private final SettlementFileGenerator fileGenerator;
+    private final SftpClient sftpClient;
+    private final NrbIpsClient nrbIpsClient;
 
     private static final ZoneId NEPAL_ZONE = ZoneId.of("Asia/Kathmandu");
+
+    /**
+     * Hourly settlement batch — Section 3.5 of the spec.
+     * Runs every hour on the hour. Calculates interim net positions
+     * and generates settlement instructions for NRB-IPS.
+     */
+    @Scheduled(cron = "${nepalupi.settlement.hourly-cron:0 0 * * * *}", zone = "Asia/Kathmandu")
+    public void runHourlySettlement() {
+        LocalDate today = LocalDate.now(NEPAL_ZONE);
+        int hour = LocalTime.now(NEPAL_ZONE).getHour();
+        log.info("Running hourly settlement batch: date={}, hour={}", today, hour);
+
+        // Get time boundaries for this hour
+        Instant hourStart = today.atTime(hour, 0).atZone(NEPAL_ZONE).toInstant();
+        Instant hourEnd = today.atTime(hour, 59, 59).atZone(NEPAL_ZONE).toInstant();
+
+        List<Transaction> hourlyTxns = txnRepo.findCompletedByDate(hourStart, hourEnd);
+
+        if (hourlyTxns.isEmpty()) {
+            log.info("No transactions in hour {} — skipping", hour);
+            return;
+        }
+
+        Map<String, Long> netPositions = calculateNetPositions(hourlyTxns);
+        long totalVolume = hourlyTxns.stream().mapToLong(Transaction::getAmount).sum();
+
+        log.info("Hourly batch: {} txns, {} paisa volume, {} banks",
+                hourlyTxns.size(), totalVolume, netPositions.size());
+
+        // Submit hourly netting to NRB-IPS for real-time settlement
+        String hourlyRef = String.format("HOURLY-%s-%02d", today, hour);
+        nrbIpsClient.submitNetSettlement(netPositions, hourlyRef);
+    }
 
     /**
      * Run at 11:59 PM Nepal time daily.
@@ -165,32 +202,43 @@ public class SettlementEngine {
     /**
      * Submit settlement report to NCHL for multilateral netting.
      * <p>
-     * In production: sends SFTP file / API call to NCHL settlement gateway.
-     * In dev mode: logs the settlement details and marks as SUBMITTED.
+     * Generates both text and ISO 20022 XML settlement files,
+     * uploads via SFTP, and initiates NRB-IPS wire transfers.
      */
     private void submitToNchl(SettlementReport report, Map<String, Long> netPositions) {
         try {
-            log.info("Submitting settlement to NCHL: date={}, banks={}", 
+            log.info("Submitting settlement to NCHL: date={}, banks={}",
                     report.getSettlementDate(), netPositions.size());
 
-            // Log each bank's net position for NCHL submission
-            netPositions.forEach((bank, position) -> {
-                String direction = position > 0 ? "PAY" : "RECEIVE";
-                log.info("  NCHL settlement: bank={} direction={} amount={} paisa",
-                        bank, direction, Math.abs(position));
-            });
+            // 1. Generate NCHL-compatible text settlement file
+            Path textFile = fileGenerator.generateNchlTextFile(report, netPositions);
+            log.info("Settlement text file: {}", textFile);
 
-            // In production: 
-            // 1. Format as NCHL settlement file (fixed-width text or ISO 20022 XML)
-            // 2. Send via SFTP to NCHL gateway
-            // 3. Wait for acknowledgement
-            // Example: nchlGateway.submitSettlementFile(report);
+            // 2. Generate ISO 20022 XML for NRB regulatory reporting
+            Path xmlFile = fileGenerator.generateIso20022Xml(report, netPositions);
+            log.info("ISO 20022 XML file: {}", xmlFile);
 
-            report.setStatus("SUBMITTED");
+            // 3. Upload files to NCHL via SFTP
+            boolean textUploaded = sftpClient.uploadSettlementFile(textFile);
+            boolean xmlUploaded = sftpClient.uploadSettlementFile(xmlFile);
+
+            if (textUploaded && xmlUploaded) {
+                log.info("Settlement files uploaded to NCHL successfully");
+            } else {
+                log.warn("Some settlement files failed to upload — will retry");
+            }
+
+            // 4. Initiate actual inter-bank settlement via NRB-IPS
+            String settlementRef = "EOD-" + report.getSettlementDate();
+            boolean ipsSuccess = nrbIpsClient.submitNetSettlement(netPositions, settlementRef);
+
+            report.setStatus(ipsSuccess ? "SUBMITTED" : "PARTIAL_SUBMISSION");
             report.setSubmittedAt(Instant.now());
             settlementRepo.save(report);
 
-            log.info("Settlement SUBMITTED to NCHL for {}", report.getSettlementDate());
+            log.info("Settlement {} to NCHL for {}",
+                    ipsSuccess ? "SUBMITTED" : "PARTIALLY SUBMITTED",
+                    report.getSettlementDate());
         } catch (Exception e) {
             log.error("Failed to submit settlement to NCHL: {}", e.getMessage());
             report.setStatus("SUBMISSION_FAILED");

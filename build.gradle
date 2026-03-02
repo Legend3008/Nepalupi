@@ -68,8 +68,22 @@ dependencies {
     // ISO 8583 — industry-standard payment messaging (same as Indian UPI / NPCI)
     implementation 'org.jpos:jpos:2.1.9'
 
+    // QR code image generation (ZXing — EMVCo/BharatQR compatible)
+    implementation 'com.google.zxing:core:3.5.3'
+    implementation 'com.google.zxing:javase:3.5.3'
+
     // Scheduling support
     implementation 'org.springframework.boot:spring-boot-starter-quartz'
+
+    // Resilience4j — Circuit breaker, rate limiter, retry (Section 16)
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-timelimiter:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-retry:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-micrometer:2.2.0'
+
+    // Flyway PostgreSQL support
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql:10.8.1'
 
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

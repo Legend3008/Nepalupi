@@ -50,4 +50,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
     List<Transaction> findByPayerVpaOrderByInitiatedAtDesc(String payerVpa);
 
     List<Transaction> findByPayeeVpaOrderByInitiatedAtDesc(String payeeVpa);
+
+    @Query("SELECT COUNT(t) FROM Transaction t WHERE t.createdAt < :before")
+    long countByCreatedAtBefore(@Param("before") Instant before);
 }

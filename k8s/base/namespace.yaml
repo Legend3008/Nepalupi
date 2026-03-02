@@ -1,0 +1,10 @@
+# ──────────────────────────────────────────────────────────
+# Nepal UPI (NPI) — Kubernetes Namespace
+# ──────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: npi-system
+  labels:
+    app.kubernetes.io/part-of: nepal-upi
+    environment: production

@@ -17,6 +17,8 @@ public interface BankAccountRepository extends JpaRepository<BankAccount, UUID> 
 
     List<BankAccount> findByUserId(UUID userId);
 
+    Optional<BankAccount> findByUserIdAndIsPrimary(UUID userId, Boolean isPrimary);
+
     @Query("SELECT ba FROM BankAccount ba JOIN User u ON ba.userId = u.id " +
            "WHERE u.mobileNumber = :mobile AND ba.bankCode = :bankCode")
     List<BankAccount> findByUserMobileAndBankCode(@Param("mobile") String mobileNumber,

@@ -1,0 +1,437 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Nepal UPI (NPI) Payment Switch — Real-time monitoring dashboard",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "📊 Transaction Overview",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 95 },
+              { "color": "green", "value": 99 }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "title": "Success Rate (SLO: 99.5%)",
+      "targets": [
+        {
+          "expr": "(sum(rate(upi_transaction_total{status=\"SUCCESS\"}[5m])) / sum(rate(upi_transaction_total[5m]))) * 100",
+          "legendFormat": "Success %"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
+      "id": 2,
+      "title": "TPS (Transactions Per Second)",
+      "targets": [
+        {
+          "expr": "sum(rate(upi_transaction_total[1m]))",
+          "legendFormat": "TPS"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 2 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 },
+      "id": 3,
+      "title": "P99 Latency (SLO: < 5s)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(upi_transaction_duration_seconds_bucket[5m]))",
+          "legendFormat": "P99"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyNPR",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 },
+      "id": 4,
+      "title": "Total Volume (NPR)",
+      "targets": [
+        {
+          "expr": "sum(upi_transaction_volume_npr_total)",
+          "legendFormat": "Volume"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+      "id": 101,
+      "title": "📈 Transaction Trends",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 5,
+      "title": "Transaction Rate by Status",
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(upi_transaction_total[5m]))",
+          "legendFormat": "{{ status }}"
+        }
+      ],
+      "type": "timeseries",
+      "fieldConfig": {
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "SUCCESS" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "FAILED" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "PENDING" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 6,
+      "title": "Latency Distribution",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(upi_transaction_duration_seconds_bucket[5m]))",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.90, rate(upi_transaction_duration_seconds_bucket[5m]))",
+          "legendFormat": "P90"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(upi_transaction_duration_seconds_bucket[5m]))",
+          "legendFormat": "P99"
+        }
+      ],
+      "type": "timeseries",
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "id": 102,
+      "title": "🏦 Bank Connectivity",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 17 },
+      "id": 7,
+      "title": "Circuit Breaker States",
+      "targets": [
+        {
+          "expr": "upi_circuit_breakers_open",
+          "legendFormat": "OPEN Breakers"
+        }
+      ],
+      "type": "stat",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 16, "x": 8, "y": 17 },
+      "id": 8,
+      "title": "Bank Response Times",
+      "targets": [
+        {
+          "expr": "rate(bank_response_time_seconds_sum[5m]) / rate(bank_response_time_seconds_count[5m])",
+          "legendFormat": "{{ bank }}"
+        }
+      ],
+      "type": "timeseries",
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "id": 103,
+      "title": "⚡ Infrastructure",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 24 },
+      "id": 9,
+      "title": "DLQ Depth",
+      "targets": [
+        {
+          "expr": "upi_dlq_depth",
+          "legendFormat": "Pending Events"
+        }
+      ],
+      "type": "stat",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 100 },
+              { "color": "red", "value": 1000 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 24 },
+      "id": 10,
+      "title": "JVM Heap Usage",
+      "targets": [
+        {
+          "expr": "jvm_memory_used_bytes{area=\"heap\"} / jvm_memory_max_bytes{area=\"heap\"} * 100",
+          "legendFormat": "Heap %"
+        }
+      ],
+      "type": "gauge",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 70 },
+              { "color": "red", "value": 85 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 24 },
+      "id": 11,
+      "title": "DB Connection Pool",
+      "targets": [
+        {
+          "expr": "hikaricp_connections_active",
+          "legendFormat": "Active"
+        },
+        {
+          "expr": "hikaricp_connections_idle",
+          "legendFormat": "Idle"
+        },
+        {
+          "expr": "hikaricp_connections_max",
+          "legendFormat": "Max"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 },
+      "id": 104,
+      "title": "🔒 Security",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 31 },
+      "id": 12,
+      "title": "Rate Limiting Events",
+      "targets": [
+        {
+          "expr": "rate(rate_limit_exceeded_total[5m])",
+          "legendFormat": "Rate Limited/sec"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 31 },
+      "id": 13,
+      "title": "MPIN Lockouts (1h)",
+      "targets": [
+        {
+          "expr": "increase(mpin_lockout_total[1h])",
+          "legendFormat": "Lockouts"
+        }
+      ],
+      "type": "stat",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 10 },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 31 },
+      "id": 14,
+      "title": "OTP Verification Rate",
+      "targets": [
+        {
+          "expr": "sum(rate(otp_verification_total{result=\"success\"}[5m])) / sum(rate(otp_verification_total[5m])) * 100",
+          "legendFormat": "Success %"
+        }
+      ],
+      "type": "gauge",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 80 },
+              { "color": "green", "value": 95 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 37 },
+      "id": 105,
+      "title": "💳 UPI Lite & International",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 38 },
+      "id": 15,
+      "title": "UPI Lite TPS",
+      "targets": [
+        {
+          "expr": "rate(upi_lite_transaction_total[5m])",
+          "legendFormat": "UPI Lite TPS"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 38 },
+      "id": 16,
+      "title": "International Remittance Volume",
+      "targets": [
+        {
+          "expr": "sum by (corridor) (international_remittance_volume_npr_total)",
+          "legendFormat": "{{ corridor }}"
+        }
+      ],
+      "type": "piechart"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 38 },
+      "id": 17,
+      "title": "Feature Flags Status",
+      "targets": [
+        {
+          "expr": "feature_flag_enabled",
+          "legendFormat": "{{ flag_name }}"
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "tags": ["nepal-upi", "npi", "payments"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(upi_transaction_total, bank)",
+        "name": "bank",
+        "options": [],
+        "query": "label_values(upi_transaction_total, bank)",
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "Asia/Kathmandu",
+  "title": "Nepal UPI (NPI) Payment Switch Dashboard",
+  "uid": "nepal-upi-main",
+  "version": 1
+}

@@ -5,22 +5,26 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Token-bucket rate limiter per IP / PSP-ID.
+ * Distributed rate limiter per IP / PSP-ID using Redis sliding window.
  * <p>
  * Limits:
  * - Per IP:  60 requests/minute (burst 10)
  * - Per PSP: 200 requests/minute (burst 20)
  * <p>
- * Uses a sliding window counter with atomic operations — no external dependency.
- * In production with multiple instances, replace with Redis-based rate limiter.
+ * Uses Redis INCR + EXPIRE for distributed rate limiting across multiple
+ * switch instances. Falls back to in-memory counters if Redis is unavailable.
+ * <p>
+ * Section 3.2: API gateway with rate limiting (distributed for multi-DC).
  */
 @Component
 @Order(0)  // Runs before PspAuthFilter
@@ -30,9 +34,17 @@ public class RateLimitingFilter implements Filter {
     private static final int IP_LIMIT_PER_MINUTE = 60;
     private static final int PSP_LIMIT_PER_MINUTE = 200;
     private static final long WINDOW_MS = 60_000L;
+    private static final Duration REDIS_TTL = Duration.ofSeconds(60);
 
+    private final StringRedisTemplate redisTemplate;
+
+    // Fallback in-memory counters when Redis is unavailable
     private final Map<String, SlidingWindow> ipWindows = new ConcurrentHashMap<>();
     private final Map<String, SlidingWindow> pspWindows = new ConcurrentHashMap<>();
+
+    public RateLimitingFilter(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
 
     @Override
     public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse,
@@ -51,8 +63,8 @@ public class RateLimitingFilter implements Filter {
 
         // Rate limit by IP
         String clientIp = getClientIp(request);
-        SlidingWindow ipWindow = ipWindows.computeIfAbsent(clientIp, k -> new SlidingWindow());
-        if (!ipWindow.tryAcquire(IP_LIMIT_PER_MINUTE)) {
+        long ipCount = tryAcquire("rate:ip:" + clientIp, IP_LIMIT_PER_MINUTE, clientIp, ipWindows);
+        if (ipCount < 0) {
             log.warn("Rate limit exceeded for IP: {}", clientIp);
             sendRateLimitError(response, "IP rate limit exceeded. Max " + IP_LIMIT_PER_MINUTE + " req/min.");
             return;
@@ -61,8 +73,8 @@ public class RateLimitingFilter implements Filter {
         // Rate limit by PSP
         String pspId = request.getHeader("X-PSP-ID");
         if (pspId != null) {
-            SlidingWindow pspWindow = pspWindows.computeIfAbsent(pspId, k -> new SlidingWindow());
-            if (!pspWindow.tryAcquire(PSP_LIMIT_PER_MINUTE)) {
+            long pspCount = tryAcquire("rate:psp:" + pspId, PSP_LIMIT_PER_MINUTE, pspId, pspWindows);
+            if (pspCount < 0) {
                 log.warn("Rate limit exceeded for PSP: {}", pspId);
                 sendRateLimitError(response, "PSP rate limit exceeded. Max " + PSP_LIMIT_PER_MINUTE + " req/min.");
                 return;
@@ -72,9 +84,39 @@ public class RateLimitingFilter implements Filter {
         // Add rate limit headers
         response.setHeader("X-RateLimit-Limit", String.valueOf(IP_LIMIT_PER_MINUTE));
         response.setHeader("X-RateLimit-Remaining",
-                String.valueOf(Math.max(0, IP_LIMIT_PER_MINUTE - ipWindow.getCount())));
+                String.valueOf(Math.max(0, IP_LIMIT_PER_MINUTE - ipCount)));
 
         chain.doFilter(request, response);
+    }
+
+    /**
+     * Try to acquire a rate limit slot. Uses Redis for distributed counting
+     * with automatic fallback to in-memory if Redis is unavailable.
+     *
+     * @return current count if allowed, -1 if rate limited
+     */
+    private long tryAcquire(String redisKey, int limit, String fallbackKey,
+                            Map<String, SlidingWindow> fallbackMap) {
+        try {
+            // Distributed: Redis INCR + EXPIRE
+            Long count = redisTemplate.opsForValue().increment(redisKey);
+            if (count != null && count == 1) {
+                // First request in window — set TTL
+                redisTemplate.expire(redisKey, REDIS_TTL);
+            }
+            if (count != null && count > limit) {
+                return -1; // Rate limited
+            }
+            return count != null ? count : 1;
+        } catch (Exception e) {
+            // Redis unavailable — fallback to in-memory
+            log.debug("Redis unavailable for rate limiting, using in-memory fallback: {}", e.getMessage());
+            SlidingWindow window = fallbackMap.computeIfAbsent(fallbackKey, k -> new SlidingWindow());
+            if (!window.tryAcquire(limit)) {
+                return -1;
+            }
+            return window.getCount();
+        }
     }
 
     private String getClientIp(HttpServletRequest request) {
@@ -94,7 +136,7 @@ public class RateLimitingFilter implements Filter {
     }
 
     /**
-     * Simple sliding window counter using fixed-window approximation.
+     * In-memory fallback: sliding window counter using fixed-window approximation.
      * Thread-safe via AtomicLong operations.
      */
     static class SlidingWindow {

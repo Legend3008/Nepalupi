@@ -233,8 +233,10 @@ public class Iso8583MessageBuilder {
         private String field42;   // Acquirer ID
         private String field49;   // Currency code
         private String field55;   // PIN block
+        private String field64;   // Primary MAC (Message Authentication Code)
         private String field70;   // Network mgmt info code
         private String field90;   // Original data element (reversals)
+        private String field128;  // Secondary MAC
 
         /**
          * Convert to hex dump for logging (simplified).

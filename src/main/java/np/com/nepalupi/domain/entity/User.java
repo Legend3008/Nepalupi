@@ -60,6 +60,14 @@ public class User {
     @Column(name = "last_device_change_at")
     private Instant lastDeviceChangeAt;
 
+    // ── MPIN security (Section 9.2) ──
+    @Column(name = "mpin_wrong_attempts")
+    @Builder.Default
+    private Integer mpinWrongAttempts = 0;
+
+    @Column(name = "mpin_locked_until")
+    private Instant mpinLockedUntil;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

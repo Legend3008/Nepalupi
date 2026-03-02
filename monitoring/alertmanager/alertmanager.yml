@@ -1,0 +1,51 @@
+# AlertManager configuration for Nepal UPI
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - receiver: 'critical-alerts'
+      matchers:
+        - severity = P1
+      continue: true
+    - receiver: 'warning-alerts'
+      matchers:
+        - severity = P2
+
+receivers:
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://npi-switch:8081/api/v1/webhooks/alerts'
+        send_resolved: true
+
+  - name: 'critical-alerts'
+    webhook_configs:
+      - url: 'http://npi-switch:8081/api/v1/webhooks/alerts'
+        send_resolved: true
+    # In production, add:
+    # pagerduty_configs:
+    #   - service_key: '<pagerduty-key>'
+    # slack_configs:
+    #   - api_url: '<slack-webhook>'
+    #     channel: '#npi-alerts-critical'
+
+  - name: 'warning-alerts'
+    webhook_configs:
+      - url: 'http://npi-switch:8081/api/v1/webhooks/alerts'
+        send_resolved: true
+    # In production, add:
+    # slack_configs:
+    #   - api_url: '<slack-webhook>'
+    #     channel: '#npi-alerts-warning'
+
+inhibit_rules:
+  - source_matchers:
+      - severity = P1
+    target_matchers:
+      - severity = P2
+    equal: ['alertname']

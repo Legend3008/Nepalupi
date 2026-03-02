@@ -1,0 +1,70 @@
+# ──────────────────────────────────────────────────────────
+# Nepal UPI (NPI) — Service + Ingress
+# ──────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: npi-switch
+  namespace: npi-system
+  labels:
+    app.kubernetes.io/name: nepal-upi
+    app.kubernetes.io/component: switch
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8081
+      targetPort: http
+      protocol: TCP
+    - name: management
+      port: 8082
+      targetPort: management
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: nepal-upi
+    app.kubernetes.io/component: switch
+
+---
+# ── Ingress ───────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: npi-switch
+  namespace: npi-system
+  labels:
+    app.kubernetes.io/name: nepal-upi
+  annotations:
+    # NGINX ingress controller
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    # Rate limiting at ingress level
+    nginx.ingress.kubernetes.io/limit-rps: "1000"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+    # TLS
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.npi.np
+      secretName: npi-tls
+  rules:
+    - host: api.npi.np
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: npi-switch
+                port:
+                  number: 8081
