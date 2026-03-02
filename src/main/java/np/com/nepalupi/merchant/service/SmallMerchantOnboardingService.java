@@ -2,12 +2,14 @@ package np.com.nepalupi.merchant.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import np.com.nepalupi.domain.entity.Vpa;
 import np.com.nepalupi.merchant.dto.SmallMerchantOnboardRequest;
 import np.com.nepalupi.merchant.entity.Merchant;
 import np.com.nepalupi.merchant.enums.MerchantCategory;
 import np.com.nepalupi.merchant.enums.MerchantStatus;
 import np.com.nepalupi.merchant.enums.MerchantType;
 import np.com.nepalupi.merchant.repository.MerchantRepository;
+import np.com.nepalupi.repository.VpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +32,7 @@ public class SmallMerchantOnboardingService {
 
     private final MerchantRepository merchantRepository;
     private final QrCodeService qrCodeService;
+    private final VpaRepository vpaRepository;
 
     @Transactional
     public Merchant onboard(SmallMerchantOnboardRequest request) {
@@ -67,6 +70,22 @@ public class SmallMerchantOnboardingService {
         String staticQr = qrCodeService.generateStaticQr(merchant);
         merchant.setStaticQrData(staticQr);
         merchant = merchantRepository.save(merchant);
+
+        // Create VPA record so transaction engine can resolve it
+        if (!vpaRepository.existsByVpaAddress(request.getDesiredVpa())) {
+            Vpa vpa = Vpa.builder()
+                    .vpaAddress(request.getDesiredVpa())
+                    .userId(request.getUserId())
+                    .bankAccountId(request.getBankAccountId() != null
+                            ? request.getBankAccountId()
+                            : merchant.getId()) // use merchant ID as placeholder
+                    .bankCode(request.getDesiredVpa().split("@")[1].toUpperCase())
+                    .isPrimary(true)
+                    .isActive(true)
+                    .build();
+            vpaRepository.save(vpa);
+            log.info("Merchant VPA entry created: {}", request.getDesiredVpa());
+        }
 
         log.info("Small merchant onboarded: id={} vpa={}", merchantId, request.getDesiredVpa());
         return merchant;

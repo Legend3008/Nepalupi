@@ -2,12 +2,14 @@ package np.com.nepalupi.merchant.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import np.com.nepalupi.domain.entity.Vpa;
 import np.com.nepalupi.merchant.dto.LargeMerchantOnboardRequest;
 import np.com.nepalupi.merchant.entity.Merchant;
 import np.com.nepalupi.merchant.enums.MerchantCategory;
 import np.com.nepalupi.merchant.enums.MerchantStatus;
 import np.com.nepalupi.merchant.enums.MerchantType;
 import np.com.nepalupi.merchant.repository.MerchantRepository;
+import np.com.nepalupi.repository.VpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +36,7 @@ public class LargeMerchantOnboardingService {
 
     private final MerchantRepository merchantRepository;
     private final QrCodeService qrCodeService;
+    private final VpaRepository vpaRepository;
 
     @Transactional
     public Merchant onboard(LargeMerchantOnboardRequest request) {
@@ -104,6 +107,23 @@ public class LargeMerchantOnboardingService {
 
         merchant.setStatus(MerchantStatus.ACTIVE);
         merchant = merchantRepository.save(merchant);
+
+        // Create VPA record so transaction engine can resolve it
+        if (!vpaRepository.existsByVpaAddress(merchant.getMerchantVpa())) {
+            Vpa vpa = Vpa.builder()
+                    .vpaAddress(merchant.getMerchantVpa())
+                    .userId(merchant.getUserId())
+                    .bankAccountId(merchant.getSettlementAccountId() != null
+                            ? merchant.getSettlementAccountId()
+                            : merchant.getId())
+                    .bankCode(merchant.getMerchantVpa().split("@")[1].toUpperCase())
+                    .isPrimary(true)
+                    .isActive(true)
+                    .build();
+            vpaRepository.save(vpa);
+            log.info("Merchant VPA entry created: {}", merchant.getMerchantVpa());
+        }
+
         log.info("Large merchant approved: id={}", merchant.getMerchantId());
         return merchant;
     }
