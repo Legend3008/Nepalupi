@@ -5,6 +5,7 @@ import np.com.nepalupi.security.entity.*;
 import np.com.nepalupi.security.enums.*;
 import np.com.nepalupi.security.service.*;
 import org.springframework.http.ResponseEntity;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/security")
 @RequiredArgsConstructor
+@Tag(name = "Security", description = "Security audits, bug bounty, certificates & incident response")
 public class SecurityController {
 
     private final SecurityAuditService auditService;

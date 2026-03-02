@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import np.com.nepalupi.domain.entity.Psp;
 import np.com.nepalupi.repository.PspRepository;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ public class PspCredentialService {
 
     private final PspRepository pspRepository;
     private final SecureRandom secureRandom = new SecureRandom();
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder(12);
 
     /**
      * Generate a sandbox token for pilot testing.
@@ -41,7 +43,7 @@ public class PspCredentialService {
         String secret = "nups_" + generateSecureToken(48);
         String webhookSecret = "whsec_" + generateSecureToken(32);
 
-        // In production, store hashed values — for now, store as-is (placeholder hashing)
+        // Store BCrypt hashed values
         psp.setApiKeyHash(hashCredential(apiKey));
         psp.setSecretHash(hashCredential(secret));
         psp.setWebhookSigningSecret(webhookSecret);
@@ -110,17 +112,17 @@ public class PspCredentialService {
     }
 
     /**
-     * Placeholder hashing — in production, use BCrypt or Argon2.
+     * BCrypt-hashed credential storage.
      */
     private String hashCredential(String raw) {
-        // SHA-256 placeholder — replace with BCrypt in production
-        try {
-            var digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(hash);
-        } catch (Exception e) {
-            throw new RuntimeException("Hashing failed", e);
-        }
+        return passwordEncoder.encode(raw);
+    }
+
+    /**
+     * Verify a raw credential against a stored BCrypt hash.
+     */
+    public boolean verifyCredential(String raw, String hash) {
+        return passwordEncoder.matches(raw, hash);
     }
 
     // ── Credential record (returned once) ────────────────────

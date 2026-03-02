@@ -74,6 +74,35 @@ public class Iso8583MessageBuilder {
     }
 
     /**
+     * Build a 0200 Balance Inquiry Request.
+     * Processing code: 310000 (balance inquiry).
+     * Amount field is zero for balance inquiries.
+     *
+     * @param accountNumber account to check balance for
+     * @param rrn           our RRN for matching
+     * @param stan          STAN for this message
+     * @return structured ISO 8583 balance inquiry message
+     */
+    public Iso8583Message buildBalanceInquiryRequest(String accountNumber, String rrn, String stan) {
+        LocalDateTime now = LocalDateTime.now(NEPAL_ZONE);
+
+        return Iso8583Message.builder()
+                .mti("0200")
+                .field2(accountNumber)
+                .field3("310000")  // balance inquiry processing code
+                .field4(formatAmount(0))
+                .field7(now.format(TRANSMISSION_DT))
+                .field11(stan)
+                .field12(now.format(LOCAL_TIME))
+                .field13(now.format(LOCAL_DATE))
+                .field37(rrn)
+                .field41(nchlConfig.getTerminalId())
+                .field42(nchlConfig.getAcquirerId())
+                .field49(CURRENCY_NPR)
+                .build();
+    }
+
+    /**
      * Build a 0400 Reversal Request.
      *
      * @param originalRrn   RRN of the original transaction being reversed

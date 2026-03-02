@@ -2,8 +2,10 @@ package np.com.nepalupi.service.psp;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import np.com.nepalupi.domain.entity.Transaction;
 import np.com.nepalupi.domain.entity.Psp;
 import np.com.nepalupi.domain.entity.PspHealthReport;
+import np.com.nepalupi.domain.enums.TransactionStatus;
 import np.com.nepalupi.repository.PspHealthReportRepository;
 import np.com.nepalupi.repository.PspRepository;
 import np.com.nepalupi.repository.TransactionRepository;
@@ -13,8 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -67,10 +71,24 @@ public class PspHealthReportService {
         LocalDate start = month.atDay(1);
         LocalDate end = month.atEndOfMonth();
 
-        // Count transactions for this PSP in the given month
-        long totalTxns = countTransactions(psp.getPspId(), start, end, null);
-        long successfulTxns = countTransactions(psp.getPspId(), start, end, "COMPLETED");
-        long failedTxns = countTransactions(psp.getPspId(), start, end, "FAILED");
+        // Get all transactions for the PSP in the date range
+        Instant startInstant = start.atStartOfDay(ZoneId.of("Asia/Kathmandu")).toInstant();
+        Instant endInstant = end.plusDays(1).atStartOfDay(ZoneId.of("Asia/Kathmandu")).toInstant();
+        List<Transaction> pspTxns = transactionRepository.findAll().stream()
+                .filter(t -> psp.getPspId().equals(t.getPspId()))
+                .filter(t -> t.getCreatedAt() != null
+                        && !t.getCreatedAt().isBefore(startInstant)
+                        && t.getCreatedAt().isBefore(endInstant))
+                .toList();
+
+        long totalTxns = pspTxns.size();
+        long successfulTxns = pspTxns.stream()
+                .filter(t -> t.getStatus() == TransactionStatus.COMPLETED)
+                .count();
+        long failedTxns = pspTxns.stream()
+                .filter(t -> t.getStatus() == TransactionStatus.DEBIT_FAILED
+                        || t.getStatus() == TransactionStatus.CREDIT_FAILED)
+                .count();
 
         BigDecimal successRate = totalTxns > 0
                 ? BigDecimal.valueOf(successfulTxns)
@@ -78,8 +96,18 @@ public class PspHealthReportService {
                         .divide(BigDecimal.valueOf(totalTxns), 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
-        // Mock average response time — real system would gather from metrics
-        int avgResponseMs = (int) (150 + Math.random() * 100);
+        // Calculate real average response time from completed transactions
+        int avgResponseMs = (int) pspTxns.stream()
+                .filter(t -> t.getStatus() == TransactionStatus.COMPLETED
+                        && t.getInitiatedAt() != null && t.getCompletedAt() != null)
+                .mapToLong(t -> t.getCompletedAt().toEpochMilli() - t.getInitiatedAt().toEpochMilli())
+                .average()
+                .orElse(0);
+
+        long totalVolume = pspTxns.stream()
+                .filter(t -> t.getStatus() == TransactionStatus.COMPLETED)
+                .mapToLong(t -> t.getAmount() != null ? t.getAmount() : 0)
+                .sum();
 
         PspHealthReport report = healthReportRepository
                 .findByPspIdAndReportMonth(psp.getPspId(), start)
@@ -93,6 +121,7 @@ public class PspHealthReportService {
         report.setFailedTxns((int) failedTxns);
         report.setSuccessRate(successRate);
         report.setAvgResponseMs(avgResponseMs);
+        report.setTotalVolumePaisa(totalVolume);
 
         report = healthReportRepository.save(report);
         log.info("Health report generated for PSP {} month {}: txns={}, success={}%",
@@ -117,19 +146,4 @@ public class PspHealthReportService {
         return healthReportRepository.findByReportMonth(month.atDay(1));
     }
 
-    /**
-     * Count transactions — mock implementation.
-     * Real system would query by PSP VPA prefix or psp_id FK.
-     */
-    private long countTransactions(String pspId, LocalDate start, LocalDate end, String status) {
-        // Simplified counting — in real system, query transaction table by PSP + date range + status
-        // For now, return reasonable mock values
-        if (status == null) {
-            return (long) (Math.random() * 10000) + 100;
-        } else if ("COMPLETED".equals(status)) {
-            return (long) (Math.random() * 9000) + 90;
-        } else {
-            return (long) (Math.random() * 200) + 5;
-        }
-    }
 }

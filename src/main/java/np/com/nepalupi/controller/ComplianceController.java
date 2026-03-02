@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import np.com.nepalupi.domain.entity.*;
 import np.com.nepalupi.service.compliance.*;
 import org.springframework.http.ResponseEntity;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -18,6 +19,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/compliance")
 @RequiredArgsConstructor
+@Tag(name = "NRB Compliance", description = "NRB compliance, AML screening & daily reports")
 public class ComplianceController {
 
     private final ComplianceAuditService auditService;

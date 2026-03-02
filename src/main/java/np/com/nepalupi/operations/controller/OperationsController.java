@@ -6,6 +6,7 @@ import np.com.nepalupi.operations.enums.IncidentStatus;
 import np.com.nepalupi.operations.enums.RunbookCategory;
 import np.com.nepalupi.operations.service.*;
 import org.springframework.http.ResponseEntity;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -45,6 +46,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/ops")
 @RequiredArgsConstructor
+@Tag(name = "Operations", description = "Incident management, runbooks, on-call & postmortems")
 public class OperationsController {
 
     private final IncidentService incidentService;

@@ -1,4 +1,4 @@
-package np.com.nepalupi;
+package np.com.nepalupi.service.settlement;
 
 import np.com.nepalupi.service.settlement.SettlementEngine;
 import np.com.nepalupi.domain.entity.Transaction;

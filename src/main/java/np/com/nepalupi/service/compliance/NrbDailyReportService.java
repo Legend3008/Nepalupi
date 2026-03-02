@@ -7,6 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 import np.com.nepalupi.domain.entity.NrbDailyReport;
 import np.com.nepalupi.domain.entity.Transaction;
 import np.com.nepalupi.domain.enums.TransactionStatus;
+import np.com.nepalupi.domain.enums.TransactionType;
+import np.com.nepalupi.merchant.repository.MerchantRepository;
 import np.com.nepalupi.repository.NrbDailyReportRepository;
 import np.com.nepalupi.repository.TransactionRepository;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -32,6 +34,7 @@ public class NrbDailyReportService {
     private final NrbDailyReportRepository dailyReportRepository;
     private final TransactionRepository transactionRepository;
     private final ComplianceAuditService auditService;
+    private final MerchantRepository merchantRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -109,9 +112,46 @@ public class NrbDailyReportService {
         report.setReversalCount(reversalCount);
         report.setReversalValuePaisa(reversalValue);
         report.setFailureReasons(failureReasonsJson);
-        // P2P = all for now (P2M not yet implemented)
-        report.setP2pCount(successCount);
-        report.setP2pValuePaisa(totalValue);
+
+        // Split by transaction type: P2P, P2M, Collect
+        // P2M: payee VPA belongs to a registered merchant
+        List<Transaction> completedTxns = dayTransactions.stream()
+                .filter(t -> t.getStatus() == TransactionStatus.COMPLETED)
+                .toList();
+
+        // Collect transactions (type=COLLECT)
+        List<Transaction> collectTxns = completedTxns.stream()
+                .filter(t -> t.getTxnType() == TransactionType.COLLECT)
+                .toList();
+        report.setCollectCount(collectTxns.size());
+        report.setCollectValuePaisa(collectTxns.stream()
+                .mapToLong(t -> t.getAmount() != null ? t.getAmount() : 0).sum());
+
+        // P2M: PAY transactions where payee VPA belongs to a merchant
+        List<Transaction> payTxns = completedTxns.stream()
+                .filter(t -> t.getTxnType() == TransactionType.PAY || t.getTxnType() == null)
+                .toList();
+
+        // Check which payee VPAs are merchant VPAs
+        java.util.Set<String> merchantVpas = payTxns.stream()
+                .map(Transaction::getPayeeVpa)
+                .distinct()
+                .filter(vpa -> merchantRepository.findByMerchantVpa(vpa).isPresent())
+                .collect(java.util.stream.Collectors.toSet());
+
+        List<Transaction> p2mTxns = payTxns.stream()
+                .filter(t -> merchantVpas.contains(t.getPayeeVpa()))
+                .toList();
+        List<Transaction> p2pTxns = payTxns.stream()
+                .filter(t -> !merchantVpas.contains(t.getPayeeVpa()))
+                .toList();
+
+        report.setP2pCount(p2pTxns.size());
+        report.setP2pValuePaisa(p2pTxns.stream()
+                .mapToLong(t -> t.getAmount() != null ? t.getAmount() : 0).sum());
+        report.setP2mCount(p2mTxns.size());
+        report.setP2mValuePaisa(p2mTxns.stream()
+                .mapToLong(t -> t.getAmount() != null ? t.getAmount() : 0).sum());
 
         report = dailyReportRepository.save(report);
         log.info("NRB daily report generated: date={}, txns={}, value={}",

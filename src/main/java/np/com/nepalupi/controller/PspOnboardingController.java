@@ -12,6 +12,7 @@ import np.com.nepalupi.service.psp.PspCredentialService;
 import np.com.nepalupi.service.psp.PspHealthReportService;
 import np.com.nepalupi.service.psp.PspOnboardingService;
 import org.springframework.http.ResponseEntity;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.YearMonth;
@@ -25,6 +26,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/psp-onboarding")
 @RequiredArgsConstructor
+@Tag(name = "PSP Onboarding", description = "PSP onboarding, certification, credentials & health reports")
 public class PspOnboardingController {
 
     private final PspOnboardingService onboardingService;

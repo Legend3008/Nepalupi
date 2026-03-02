@@ -6,6 +6,7 @@ import np.com.nepalupi.launch.enums.*;
 import np.com.nepalupi.launch.service.*;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -16,6 +17,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/launch")
 @RequiredArgsConstructor
+@Tag(name = "Launch Management", description = "Phased launch rollout, feature flags & metrics")
 public class LaunchController {
 
     private final LaunchPhaseService launchPhaseService;

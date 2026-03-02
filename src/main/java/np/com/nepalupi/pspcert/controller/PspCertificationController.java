@@ -6,6 +6,7 @@ import np.com.nepalupi.pspcert.enums.*;
 import np.com.nepalupi.pspcert.service.PspAppCertificationService;
 import np.com.nepalupi.pspcert.service.PspSdkVersionService;
 import org.springframework.http.ResponseEntity;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/psp-certification")
 @RequiredArgsConstructor
+@Tag(name = "PSP App Certification", description = "PSP app certification, SDK versions & test suites")
 public class PspCertificationController {
 
     private final PspAppCertificationService certService;

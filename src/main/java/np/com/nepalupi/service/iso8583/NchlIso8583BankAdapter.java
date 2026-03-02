@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import np.com.nepalupi.domain.dto.response.BankResponse;
 import np.com.nepalupi.domain.enums.Iso8583ResponseCode;
 import np.com.nepalupi.exception.BankTimeoutException;
+import np.com.nepalupi.repository.Iso8583MessageLogRepository;
 import np.com.nepalupi.service.bank.BankAdapter;
 import np.com.nepalupi.util.IdGenerator;
 import org.springframework.stereotype.Component;
@@ -34,6 +35,7 @@ public class NchlIso8583BankAdapter implements BankAdapter {
     private final NchlChannelManager channelManager;
     private final Iso8583MessageBuilder messageBuilder;
     private final IdGenerator idGenerator;
+    private final Iso8583MessageLogRepository messageLogRepository;
 
     @Override
     public String getBankCode() {
@@ -92,8 +94,26 @@ public class NchlIso8583BankAdapter implements BankAdapter {
 
     @Override
     public BankResponse checkBalance(String accountNumber) {
-        log.info("ISO8583 balance inquiry not yet implemented via NCHL");
-        return BankResponse.error("NOT_IMPLEMENTED", "Balance check via NCHL not available yet");
+        log.info("ISO8583 BALANCE INQUIRY — account: {}****",
+                accountNumber.substring(0, Math.min(4, accountNumber.length())));
+
+        String rrn = idGenerator.generateRRN();
+        String stan = idGenerator.generateStan();
+
+        // Build balance inquiry: processing code 310000
+        Iso8583MessageBuilder.Iso8583Message request = messageBuilder.buildBalanceInquiryRequest(
+                accountNumber, rrn, stan);
+
+        try {
+            Iso8583MessageBuilder.Iso8583Message response = channelManager.sendMessage(request, null);
+            return mapResponse(response);
+        } catch (IllegalStateException e) {
+            log.error("NCHL channel not ready for balance inquiry: {}", e.getMessage());
+            throw new BankTimeoutException("NCHL channel unavailable", e);
+        } catch (Exception e) {
+            log.error("ISO8583 balance inquiry failed: {}", e.getMessage());
+            throw new BankTimeoutException("Balance inquiry communication error", e);
+        }
     }
 
     @Override
@@ -101,10 +121,28 @@ public class NchlIso8583BankAdapter implements BankAdapter {
         log.info("ISO8583 REVERSAL — original txn: {}", originalTxnId);
 
         String stan = idGenerator.generateStan();
-        String originalRrn = originalTxnId; // In production, look up original RRN from audit log
+
+        // Look up original RRN and details from audit log
+        UUID txnUuid = parseTransactionId(originalTxnId);
+        String originalRrn = originalTxnId;
+        String originalAccount = "0000000000";
+        long originalAmount = 0;
+        String originalStan = "000000";
+
+        if (txnUuid != null) {
+            var logs = messageLogRepository.findByTransactionIdOrderByCreatedAtAsc(txnUuid);
+            for (var logEntry : logs) {
+                if ("0200".equals(logEntry.getMti()) && "OUTBOUND".equals(logEntry.getDirection())) {
+                    originalRrn = logEntry.getRrn() != null ? logEntry.getRrn() : originalRrn;
+                    originalStan = logEntry.getStan() != null ? logEntry.getStan() : originalStan;
+                    originalAmount = logEntry.getAmountPaisa() != null ? logEntry.getAmountPaisa() : 0;
+                    break;
+                }
+            }
+        }
 
         Iso8583MessageBuilder.Iso8583Message request = messageBuilder.buildReversalRequest(
-                "0000000000", 0, originalRrn, "000000", stan);
+                originalAccount, originalAmount, originalRrn, originalStan, stan);
 
         try {
             UUID transactionUuid = parseTransactionId(originalTxnId);

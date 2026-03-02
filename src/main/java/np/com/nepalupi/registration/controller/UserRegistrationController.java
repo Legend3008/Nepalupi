@@ -11,6 +11,7 @@ import np.com.nepalupi.registration.service.DeviceChangeService;
 import np.com.nepalupi.registration.service.KycService;
 import np.com.nepalupi.registration.service.UserRegistrationOrchestrator;
 import org.springframework.http.ResponseEntity;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -37,6 +38,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/registration")
 @RequiredArgsConstructor
+@Tag(name = "User Registration", description = "SIM binding, bank linking, VPA creation, MPIN & KYC")
 public class UserRegistrationController {
 
     private final UserRegistrationOrchestrator orchestrator;

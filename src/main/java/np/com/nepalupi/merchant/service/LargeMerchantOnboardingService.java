@@ -155,7 +155,8 @@ public class LargeMerchantOnboardingService {
             return HexFormat.of().formatHex(
                     MessageDigest.getInstance("SHA-256").digest(decoded));
         } catch (Exception e) {
-            return null;
+            log.warn("Failed to hash document: {}", e.getMessage());
+            return "HASH_FAILED_" + System.currentTimeMillis();
         }
     }
 }

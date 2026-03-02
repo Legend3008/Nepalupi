@@ -7,6 +7,7 @@ import np.com.nepalupi.certification.service.BankCertificationService;
 import np.com.nepalupi.certification.service.BankPerformanceService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -17,6 +18,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/certification")
 @RequiredArgsConstructor
+@Tag(name = "Bank Certification", description = "Bank technical certification & performance benchmarks")
 public class BankCertificationController {
 
     private final BankCertificationService certService;
