@@ -105,6 +105,27 @@ public class BankConnector {
         }
     }
 
+    /**
+     * Check the balance of an account at a bank.
+     */
+    @Retryable(
+            retryFor = BankTimeoutException.class,
+            maxAttempts = 2,
+            backoff = @Backoff(delay = 300, multiplier = 2)
+    )
+    public BankResponse checkBalance(String bankCode, String accountNumber) {
+        BankAdapter adapter = resolveAdapter(bankCode);
+        log.info("Sending BALANCE CHECK to bank {} for account ****{}",
+                bankCode, accountNumber.substring(Math.max(0, accountNumber.length() - 4)));
+
+        try {
+            return adapter.checkBalance(accountNumber);
+        } catch (Exception e) {
+            log.warn("Bank timeout during BALANCE CHECK: {}", e.getMessage());
+            throw new BankTimeoutException("Balance check timeout for bank " + bankCode, e);
+        }
+    }
+
     private BankAdapter resolveAdapter(String bankCode) {
         BankAdapter adapter = adapters.get(bankCode);
         if (adapter != null) {

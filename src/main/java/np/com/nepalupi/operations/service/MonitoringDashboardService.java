@@ -2,8 +2,10 @@ package np.com.nepalupi.operations.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import np.com.nepalupi.domain.enums.TransactionStatus;
 import np.com.nepalupi.operations.entity.Incident;
 import np.com.nepalupi.operations.repository.IncidentRepository;
+import np.com.nepalupi.repository.TransactionRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -11,17 +13,18 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Monitoring Dashboard Service — aggregates system health metrics.
+ * Monitoring Dashboard Service — aggregates real system health metrics.
  * <p>
- * Provides real-time system health overview for the operations dashboard:
+ * Collects from actual DB state:
  * - Active incidents by severity
- * - Transaction success rate
- * - Average latency
- * - Bank connectivity status
- * - Kafka consumer lag
- * - Database connection pool usage
+ * - Transaction success rate (last 24h)
+ * - Average latency (from completed transactions)
+ * - Total transaction volume
+ * - Per-status transaction counts
  */
 @Service
 @RequiredArgsConstructor
@@ -29,9 +32,15 @@ import java.util.Map;
 public class MonitoringDashboardService {
 
     private final IncidentRepository incidentRepository;
+    private final TransactionRepository transactionRepository;
+
+    // Cached metrics (refreshed every 30s by health check)
+    private final AtomicReference<Double> cachedSuccessRate = new AtomicReference<>(100.0);
+    private final AtomicReference<Double> cachedAvgLatencyMs = new AtomicReference<>(0.0);
+    private final AtomicLong cachedTotalTxns = new AtomicLong(0);
 
     /**
-     * Get current system health snapshot.
+     * Get current system health snapshot with real metrics.
      */
     public Map<String, Object> getSystemHealth() {
         Map<String, Object> health = new HashMap<>();
@@ -56,7 +65,7 @@ public class MonitoringDashboardService {
                 .orElse(0);
         health.put("highestActiveSeverity", highestSev);
 
-        // Overall status
+        // Overall status based on incidents
         String overallStatus;
         if (activeIncidents.isEmpty()) {
             overallStatus = "HEALTHY";
@@ -67,27 +76,73 @@ public class MonitoringDashboardService {
         }
         health.put("overallStatus", overallStatus);
 
-        // Simulated metrics (in production: pull from Prometheus / Grafana)
-        health.put("transactionSuccessRate", 99.7);
-        health.put("avgLatencyMs", 180);
-        health.put("kafkaConsumerLag", 12);
-        health.put("dbConnectionPoolUsage", 45);
+        // Real transaction metrics
+        health.put("transactionSuccessRate", cachedSuccessRate.get());
+        health.put("avgLatencyMs", cachedAvgLatencyMs.get());
+        health.put("totalTransactions24h", cachedTotalTxns.get());
+
+        // Transaction status breakdown (last 24h)
+        Instant dayAgo = Instant.now().minus(24, ChronoUnit.HOURS);
+        var allTxns = transactionRepository.findAll();
+        Map<String, Long> statusBreakdown = new HashMap<>();
+        for (TransactionStatus status : TransactionStatus.values()) {
+            long count = allTxns.stream()
+                    .filter(t -> t.getStatus() == status
+                            && t.getCreatedAt() != null
+                            && t.getCreatedAt().isAfter(dayAgo))
+                    .count();
+            if (count > 0) {
+                statusBreakdown.put(status.name(), count);
+            }
+        }
+        health.put("statusBreakdown", statusBreakdown);
+
+        // Total volume (all time)
+        long totalVolume = allTxns.stream()
+                .filter(t -> t.getStatus() == TransactionStatus.COMPLETED && t.getAmount() != null)
+                .mapToLong(t -> t.getAmount())
+                .sum();
+        health.put("totalVolumePaisa", totalVolume);
+        health.put("totalVolumeNPR", totalVolume / 100.0);
+
         health.put("lastUpdateAt", Instant.now().toString());
 
         return health;
     }
 
     /**
-     * Healthcheck — runs every 30 seconds.
-     * In production, auto-creates incidents when thresholds are breached.
+     * Healthcheck — runs every 30 seconds to refresh cached metrics from DB.
      */
     @Scheduled(fixedRate = 30000)
     public void periodicHealthCheck() {
-        // In production:
-        // - Check transaction success rate < 95% → auto-create SEV2
-        // - Check avg latency > 5000ms → auto-create SEV3
-        // - Check Kafka lag > 10000 → auto-create SEV3
-        // - Check any bank adapter down → auto-create SEV3
-        log.trace("Periodic health check completed");
+        try {
+            Instant dayAgo = Instant.now().minus(24, ChronoUnit.HOURS);
+            var recentTxns = transactionRepository.findAll().stream()
+                    .filter(t -> t.getCreatedAt() != null && t.getCreatedAt().isAfter(dayAgo))
+                    .toList();
+
+            long total = recentTxns.size();
+            cachedTotalTxns.set(total);
+
+            if (total > 0) {
+                long completed = recentTxns.stream()
+                        .filter(t -> t.getStatus() == TransactionStatus.COMPLETED)
+                        .count();
+                cachedSuccessRate.set(Math.round(completed * 10000.0 / total) / 100.0);
+
+                double avgLatency = recentTxns.stream()
+                        .filter(t -> t.getStatus() == TransactionStatus.COMPLETED
+                                && t.getInitiatedAt() != null && t.getCompletedAt() != null)
+                        .mapToLong(t -> java.time.Duration.between(t.getInitiatedAt(), t.getCompletedAt()).toMillis())
+                        .average()
+                        .orElse(0.0);
+                cachedAvgLatencyMs.set(Math.round(avgLatency * 100.0) / 100.0);
+            }
+
+            log.trace("Health metrics refreshed: txns={}, successRate={}%, avgLatency={}ms",
+                    total, cachedSuccessRate.get(), cachedAvgLatencyMs.get());
+        } catch (Exception e) {
+            log.warn("Health check failed: {}", e.getMessage());
+        }
     }
 }

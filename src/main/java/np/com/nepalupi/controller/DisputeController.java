@@ -1,5 +1,6 @@
 package np.com.nepalupi.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import np.com.nepalupi.domain.dto.request.DisputeRequest;
@@ -35,6 +36,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/dispute")
 @RequiredArgsConstructor
+@Tag(name = "Disputes", description = "UDIR dispute resolution — raise, track, resolve disputes")
 public class DisputeController {
 
     private final DisputeService disputeService;

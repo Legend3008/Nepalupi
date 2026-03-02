@@ -110,12 +110,24 @@ nepalupi:
     cron: "0 59 23 * * *"              # 11:59 PM daily
   psp:
     request-expiry-seconds: 300        # 5 minutes replay window
+  security:
+    hmac-enabled: false                # Set true in production
   kafka:
     topics:
       transaction-events: transaction-events
       settlement-events: settlement-events
       notification-events: notification-events
       audit-events: audit-events
+
+# ── OpenAPI / Swagger ─────────────────────────────────────────
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+  show-actuator: false
 
 # ── Logging ───────────────────────────────────────────────────
 logging:

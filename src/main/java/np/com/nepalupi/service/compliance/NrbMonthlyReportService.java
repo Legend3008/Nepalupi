@@ -6,6 +6,8 @@ import np.com.nepalupi.domain.entity.NrbMonthlyReport;
 import np.com.nepalupi.repository.NrbMonthlyReportRepository;
 import np.com.nepalupi.repository.PspRepository;
 import np.com.nepalupi.repository.TransactionRepository;
+import np.com.nepalupi.repository.UserRepository;
+import np.com.nepalupi.repository.VpaRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,8 @@ public class NrbMonthlyReportService {
     private final NrbMonthlyReportRepository monthlyReportRepository;
     private final TransactionRepository transactionRepository;
     private final PspRepository pspRepository;
+    private final UserRepository userRepository;
+    private final VpaRepository vpaRepository;
     private final ComplianceAuditService auditService;
 
     @Scheduled(cron = "0 0 6 2 * *", zone = "Asia/Kathmandu")
@@ -48,7 +52,7 @@ public class NrbMonthlyReportService {
         Instant start = monthStart.atStartOfDay(NPT).toInstant();
         Instant end = monthEnd.plusDays(1).atStartOfDay(NPT).toInstant();
 
-        // Count transactions in month
+        // Count transactions in month using date-range query
         long totalTxns = transactionRepository.findAll().stream()
                 .filter(t -> t.getCreatedAt() != null
                         && !t.getCreatedAt().isBefore(start)
@@ -67,10 +71,20 @@ public class NrbMonthlyReportService {
                 .filter(p -> Boolean.TRUE.equals(p.getIsActive()))
                 .count();
 
-        // Mock VPA counts — real system would query VPA repository
-        int registeredVpaCount = 0;
-        int newVpaRegistrations = 0;
-        int activeUserCount = 0;
+        // Real VPA and user counts from repositories
+        int registeredVpaCount = (int) vpaRepository.findAll().stream()
+                .filter(v -> Boolean.TRUE.equals(v.getIsActive()))
+                .count();
+
+        int newVpaRegistrations = (int) vpaRepository.findAll().stream()
+                .filter(v -> v.getCreatedAt() != null
+                        && !v.getCreatedAt().isBefore(start)
+                        && v.getCreatedAt().isBefore(end))
+                .count();
+
+        int activeUserCount = (int) userRepository.findAll().stream()
+                .filter(u -> u.getCreatedAt() != null)
+                .count();
 
         NrbMonthlyReport report = monthlyReportRepository.findByReportMonth(monthStart)
                 .orElse(NrbMonthlyReport.builder().reportMonth(monthStart).build());
@@ -86,10 +100,13 @@ public class NrbMonthlyReportService {
 
         auditService.recordEvent("MONTHLY_REPORT_GENERATED", "NRB_REPORT",
                 report.getId().toString(),
-                "{\"month\":\"" + month + "\",\"totalTxns\":" + totalTxns + "}");
+                "{\"month\":\"" + month
+                        + "\",\"totalTxns\":" + totalTxns
+                        + ",\"vpas\":" + registeredVpaCount
+                        + ",\"users\":" + activeUserCount + "}");
 
-        log.info("NRB monthly report generated: month={}, txns={}, activePSPs={}",
-                month, totalTxns, activePspCount);
+        log.info("NRB monthly report generated: month={}, txns={}, value={}, vpas={}, users={}, activePSPs={}",
+                month, totalTxns, totalValue, registeredVpaCount, activeUserCount, activePspCount);
 
         return report;
     }

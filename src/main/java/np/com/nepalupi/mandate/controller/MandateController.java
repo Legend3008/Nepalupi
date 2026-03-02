@@ -1,5 +1,6 @@
 package np.com.nepalupi.mandate.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import np.com.nepalupi.mandate.entity.Mandate;
 import np.com.nepalupi.mandate.entity.MandateExecution;
@@ -30,6 +31,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/mandates")
 @RequiredArgsConstructor
+@Tag(name = "Mandates", description = "UPI Autopay — recurring payment mandates")
 public class MandateController {
 
     private final MandateService mandateService;

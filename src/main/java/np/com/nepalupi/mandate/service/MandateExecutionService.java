@@ -2,6 +2,8 @@ package np.com.nepalupi.mandate.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import np.com.nepalupi.domain.dto.request.PaymentRequest;
+import np.com.nepalupi.domain.dto.response.TransactionResponse;
 import np.com.nepalupi.mandate.entity.Mandate;
 import np.com.nepalupi.mandate.entity.MandateExecution;
 import np.com.nepalupi.mandate.enums.MandateExecutionStatus;
@@ -9,6 +11,8 @@ import np.com.nepalupi.mandate.enums.MandateFrequency;
 import np.com.nepalupi.mandate.enums.MandateStatus;
 import np.com.nepalupi.mandate.repository.MandateExecutionRepository;
 import np.com.nepalupi.mandate.repository.MandateRepository;
+import np.com.nepalupi.service.transaction.TransactionOrchestrator;
+import np.com.nepalupi.util.IdGenerator;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +44,7 @@ public class MandateExecutionService {
     private final MandateExecutionRepository executionRepository;
     private final MandateRepository mandateRepository;
     private final MandateService mandateService;
+    private final TransactionOrchestrator transactionOrchestrator;
 
     /**
      * Pre-notification job — runs daily at 8 AM, sends notifications for tomorrow's debits.
@@ -163,13 +168,23 @@ public class MandateExecutionService {
             throw new IllegalStateException("Execution amount exceeds mandate ceiling");
         }
 
-        // In production:
-        // 1. Create transaction via TransactionOrchestrator
-        // 2. Debit payer's bank account
-        // 3. Credit merchant's bank account
-        // UUID txnId = transactionOrchestrator.executeMandateDebit(mandate, execution);
-        // execution.setTransactionId(txnId);
+        // Create payment via TransactionOrchestrator (mandate debit flow)
+        PaymentRequest paymentRequest = PaymentRequest.builder()
+                .payerVpa(mandate.getPayerVpa())
+                .payeeVpa(mandate.getMerchantVpa())
+                .amount(execution.getAmountPaisa())
+                .note("Mandate: " + mandate.getMandateRef() + " | " + mandate.getPurpose())
+                .idempotencyKey("MANDATE-" + execution.getId().toString())
+                .build();
 
+        TransactionResponse txnResponse = transactionOrchestrator.initiatePayment(paymentRequest);
+
+        if (!txnResponse.isSuccess()) {
+            throw new IllegalStateException("Mandate debit failed: " + txnResponse.getFailureReason());
+        }
+
+        execution.setTransactionId(
+                java.util.UUID.nameUUIDFromBytes(txnResponse.getUpiTxnId().getBytes()));
         execution.setStatus(MandateExecutionStatus.COMPLETED);
         execution.setExecutedAt(Instant.now());
         executionRepository.save(execution);

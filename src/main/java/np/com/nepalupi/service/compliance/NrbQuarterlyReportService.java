@@ -6,7 +6,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import np.com.nepalupi.domain.entity.NrbQuarterlyReport;
 import np.com.nepalupi.repository.NrbQuarterlyReportRepository;
+import np.com.nepalupi.repository.FraudFlagRepository;
 import np.com.nepalupi.repository.SuspiciousTransactionReportRepository;
+import np.com.nepalupi.repository.TransactionRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,8 @@ public class NrbQuarterlyReportService {
 
     private final NrbQuarterlyReportRepository quarterlyReportRepository;
     private final SuspiciousTransactionReportRepository strRepository;
+    private final FraudFlagRepository fraudFlagRepository;
+    private final TransactionRepository transactionRepository;
     private final ComplianceAuditService auditService;
     private final ObjectMapper objectMapper;
 
@@ -65,12 +69,38 @@ public class NrbQuarterlyReportService {
 
         report.setStrFiledCount((int) strCount);
 
-        // Mock fraud and downtime data — real system would aggregate from incidents
-        report.setFraudIncidentCount((int) totalStrCount);
-        report.setFraudTotalValuePaisa(0L); // Would aggregate from flagged transactions
-        report.setFraudTypes(toJson(Map.of("STRUCTURING", 0, "VELOCITY", 0)));
-        report.setFraudResolutionSummary(toJson(Map.of("resolved", 0, "pending", 0)));
-        report.setSystemDowntimeMinutes(0);
+        // Real fraud data from fraud flags and transactions
+        long fraudFlagCount = fraudFlagRepository.findAll().stream()
+                .filter(f -> f.getCreatedAt() != null
+                        && !f.getCreatedAt().isBefore(startInstant)
+                        && f.getCreatedAt().isBefore(endInstant))
+                .count();
+
+        long fraudValue = fraudFlagRepository.findAll().stream()
+                .filter(f -> f.getCreatedAt() != null
+                        && !f.getCreatedAt().isBefore(startInstant)
+                        && f.getCreatedAt().isBefore(endInstant)
+                        && f.getTransactionId() != null)
+                .mapToLong(f -> transactionRepository.findById(f.getTransactionId())
+                        .map(t -> t.getAmount() != null ? t.getAmount() : 0L)
+                        .orElse(0L))
+                .sum();
+
+        report.setFraudIncidentCount((int) fraudFlagCount);
+        report.setFraudTotalValuePaisa(fraudValue);
+        report.setFraudTypes(toJson(Map.of(
+                "AMOUNT_SPIKE", fraudFlagRepository.findAll().stream()
+                        .filter(f -> f.getSignals() != null && f.getSignals().contains("AMOUNT_SPIKE")).count(),
+                "HIGH_VELOCITY", fraudFlagRepository.findAll().stream()
+                        .filter(f -> f.getSignals() != null && f.getSignals().contains("HIGH_VELOCITY")).count()
+        )));
+        report.setFraudResolutionSummary(toJson(Map.of(
+                "reviewed", fraudFlagRepository.findAll().stream()
+                        .filter(f -> Boolean.TRUE.equals(f.getReviewed())).count(),
+                "pending", fraudFlagRepository.findAll().stream()
+                        .filter(f -> !Boolean.TRUE.equals(f.getReviewed())).count()
+        )));
+        report.setSystemDowntimeMinutes(0); // Would integrate with incident tracking
         report.setDowntimeIncidents("[]");
         report.setSecurityIncidents(0);
 

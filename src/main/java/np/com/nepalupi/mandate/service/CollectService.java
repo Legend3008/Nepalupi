@@ -2,9 +2,12 @@ package np.com.nepalupi.mandate.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import np.com.nepalupi.domain.dto.request.PaymentRequest;
+import np.com.nepalupi.domain.dto.response.TransactionResponse;
 import np.com.nepalupi.mandate.entity.CollectRequest;
 import np.com.nepalupi.mandate.enums.CollectRequestStatus;
 import np.com.nepalupi.mandate.repository.CollectRequestRepository;
+import np.com.nepalupi.service.transaction.TransactionOrchestrator;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +39,7 @@ import java.util.UUID;
 public class CollectService {
 
     private final CollectRequestRepository collectRequestRepository;
+    private final TransactionOrchestrator transactionOrchestrator;
     private static final int DEFAULT_EXPIRY_MINUTES = 30;
 
     /**
@@ -72,22 +76,41 @@ public class CollectService {
 
     /**
      * Approve a collect request — payer agrees to pay.
+     * Triggers TransactionOrchestrator to execute the actual debit/credit flow.
      */
     @Transactional
     public CollectRequest approve(UUID requestId) {
         CollectRequest request = getRequest(requestId);
         validatePending(request);
 
-        request.setStatus(CollectRequestStatus.APPROVED);
+        // Execute payment via TransactionOrchestrator (collect = pull payment)
+        PaymentRequest paymentRequest = PaymentRequest.builder()
+                .payerVpa(request.getPayerVpa())
+                .payeeVpa(request.getRequestorVpa())
+                .amount(request.getAmountPaisa())
+                .note("Collect: " + request.getCollectRef() +
+                      (request.getDescription() != null ? " | " + request.getDescription() : ""))
+                .idempotencyKey("COLLECT-" + request.getId().toString())
+                .build();
+
+        TransactionResponse txnResponse = transactionOrchestrator.initiatePayment(paymentRequest);
+
         request.setRespondedAt(Instant.now());
-        request = collectRequestRepository.save(request);
 
-        // In production: trigger TransactionOrchestrator to execute the payment
-        // transaction = orchestrator.initiateCollectPayment(request);
-        // request.setTransactionId(transaction.getId());
+        if (txnResponse.isSuccess()) {
+            request.setStatus(CollectRequestStatus.APPROVED);
+            request.setTransactionId(
+                    UUID.nameUUIDFromBytes(txnResponse.getUpiTxnId().getBytes()));
+            log.info("Collect request approved and payment completed: ref={}",
+                    request.getCollectRef());
+        } else {
+            request.setStatus(CollectRequestStatus.REJECTED);
+            request.setRejectionReason("Payment failed: " + txnResponse.getFailureReason());
+            log.warn("Collect request payment failed: ref={} reason={}",
+                    request.getCollectRef(), txnResponse.getFailureReason());
+        }
 
-        log.info("Collect request approved: ref={}", request.getCollectRef());
-        return request;
+        return collectRequestRepository.save(request);
     }
 
     /**

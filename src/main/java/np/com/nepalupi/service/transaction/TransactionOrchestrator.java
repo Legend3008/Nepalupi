@@ -2,6 +2,7 @@ package np.com.nepalupi.service.transaction;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import np.com.nepalupi.config.TransactionMetrics;
 import np.com.nepalupi.domain.dto.request.PaymentRequest;
 import np.com.nepalupi.domain.dto.response.BankResponse;
 import np.com.nepalupi.domain.dto.response.TransactionResponse;
@@ -50,6 +51,7 @@ public class TransactionOrchestrator {
     private final BankConnector bankConnector;
     private final ReversalService reversalService;
     private final TransactionEventPublisher eventPublisher;
+    private final TransactionMetrics metrics;
 
     @Value("${nepalupi.transaction.expiry-minutes:10}")
     private int expiryMinutes;
@@ -99,9 +101,11 @@ public class TransactionOrchestrator {
         txnRepo.save(txn);
         log.info("Transaction created: {} | {} → {} | {} paisa",
                 txn.getUpiTxnId(), txn.getPayerVpa(), txn.getPayeeVpa(), txn.getAmount());
+        metrics.getTxnInitiated().increment();
 
         // ── Step 5: Fraud assessment ─────────────────────────
-        fraudEngine.assess(payerVpa.getUserId(), request.getAmount(), txn.getId());
+        fraudEngine.assess(payerVpa.getUserId(), request.getAmount(), txn.getId(),
+                request.getDeviceFingerprint(), request.getPayeeVpa());
 
         // ── Step 6: Transition to DEBIT_PENDING ──────────────
         // (In full UPI, user enters PIN here — PIN encrypted with bank's key via HSM)
@@ -121,6 +125,8 @@ public class TransactionOrchestrator {
             txn.setFailureCode(debitResponse.getErrorCode());
             txn.setFailureReason(debitResponse.getErrorMessage());
             txnRepo.save(txn);
+            metrics.getTxnFailed().increment();
+            metrics.getBankDebitFailed().increment();
 
             publishEvent(txn, payerVpa, payeeVpa);
             return TransactionResponse.failed(txn);
@@ -128,6 +134,7 @@ public class TransactionOrchestrator {
 
         stateMachine.transition(txn, TransactionStatus.DEBITED);
         txnRepo.save(txn);
+        metrics.getBankDebitSuccess().increment();
 
         // Record daily stats for limits
         limitService.recordTransaction(payerVpa.getUserId(), request.getAmount());
@@ -148,6 +155,8 @@ public class TransactionOrchestrator {
             txn.setFailureCode(creditResponse.getErrorCode());
             txn.setFailureReason(creditResponse.getErrorMessage());
             txnRepo.save(txn);
+            metrics.getTxnFailed().increment();
+            metrics.getBankCreditFailed().increment();
 
             // CRITICAL: Debit succeeded but credit failed — initiate reversal
             reversalService.initiateReversal(txn);
@@ -159,6 +168,8 @@ public class TransactionOrchestrator {
         // ── Step 9: Complete ─────────────────────────────────
         stateMachine.transition(txn, TransactionStatus.COMPLETED);
         txnRepo.save(txn);
+        metrics.getTxnCompleted().increment();
+        metrics.getBankCreditSuccess().increment();
 
         log.info("Transaction COMPLETED: {} | {} → {} | {} paisa in {}ms",
                 txn.getUpiTxnId(), txn.getPayerVpa(), txn.getPayeeVpa(),

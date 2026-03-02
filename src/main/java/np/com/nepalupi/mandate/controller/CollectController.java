@@ -1,5 +1,6 @@
 package np.com.nepalupi.mandate.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import np.com.nepalupi.mandate.entity.CollectRequest;
 import np.com.nepalupi.mandate.service.CollectService;
@@ -21,6 +22,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/collect")
 @RequiredArgsConstructor
+@Tag(name = "Collect", description = "UPI Collect (pull payment) requests")
 public class CollectController {
 
     private final CollectService collectService;
