@@ -43,6 +43,10 @@ public class BankAccount {
     @Builder.Default
     private Boolean isPrimary = false;
 
+    @Column(name = "is_active")
+    @Builder.Default
+    private Boolean isActive = true;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

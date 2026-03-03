@@ -68,6 +68,40 @@ public class User {
     @Column(name = "mpin_locked_until")
     private Instant mpinLockedUntil;
 
+    // ── Account freeze fields (Fraud module) ──
+    @Column(name = "is_frozen")
+    @Builder.Default
+    private Boolean isFrozen = false;
+
+    @Column(name = "frozen_at")
+    private Instant frozenAt;
+
+    @Column(name = "freeze_reason")
+    private String freezeReason;
+
+    // ── App lock preference ──
+    @Column(name = "app_lock_enabled")
+    @Builder.Default
+    private Boolean appLockEnabled = false;
+
+    @Column(name = "app_lock_type")
+    private String appLockType; // MPIN, BIOMETRIC, PATTERN
+
+    // ── Preferred language ──
+    @Column(name = "preferred_language")
+    @Builder.Default
+    private String preferredLanguage = "ne"; // Nepali default
+
+    @Column(name = "email")
+    private String email;
+
+    @Column(name = "email_verified")
+    @Builder.Default
+    private Boolean emailVerified = false;
+
+    @Column(name = "fcm_token")
+    private String fcmToken;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

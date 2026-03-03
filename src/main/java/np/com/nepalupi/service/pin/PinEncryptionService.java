@@ -7,9 +7,11 @@ import javax.crypto.Cipher;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.MessageDigest;
 import java.security.PublicKey;
 import java.util.Base64;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -32,6 +34,48 @@ public class PinEncryptionService {
     // In production: injected HSM client (e.g., HsmClient hsmClient)
     // For dev: in-memory RSA key pairs per bank
     private final Map<String, KeyPair> bankKeys = new ConcurrentHashMap<>();
+
+    // Dev placeholder: In production, hashed PINs stored in secure DB / HSM
+    private final Map<UUID, String> userPinHashes = new ConcurrentHashMap<>();
+
+    /**
+     * Set/update a user's MPIN.
+     * PRODUCTION NOTE: PIN should be hashed with PBKDF2/bcrypt and stored in DB.
+     *
+     * @param userId the user ID
+     * @param pin    the 4-6 digit MPIN
+     */
+    public void setPin(UUID userId, String pin) {
+        String hash = hashPin(pin);
+        userPinHashes.put(userId, hash);
+        log.info("MPIN set for user: {}", userId);
+    }
+
+    /**
+     * Verify a user's MPIN.
+     *
+     * @param userId the user ID
+     * @param pin    the PIN to verify
+     * @return true if PIN matches
+     */
+    public boolean verifyPin(UUID userId, String pin) {
+        String storedHash = userPinHashes.get(userId);
+        if (storedHash == null) {
+            log.warn("No MPIN set for user: {}", userId);
+            return false;
+        }
+        return storedHash.equals(hashPin(pin));
+    }
+
+    private String hashPin(String pin) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(pin.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(hash);
+        } catch (Exception e) {
+            throw new RuntimeException("PIN hashing failed", e);
+        }
+    }
 
     /**
      * Encrypt a user's MPIN with the target bank's public key.

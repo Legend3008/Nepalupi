@@ -13,12 +13,16 @@ import np.com.nepalupi.repository.TransactionRepository;
 import np.com.nepalupi.service.transaction.BalanceEnquiryService;
 import np.com.nepalupi.service.transaction.PspValidationService;
 import np.com.nepalupi.service.transaction.TransactionOrchestrator;
+import np.com.nepalupi.service.transaction.TransactionSearchService;
+import np.com.nepalupi.service.transaction.TransactionReceiptService;
 import np.com.nepalupi.util.IdGenerator;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+
+import java.time.LocalDate;
 
 /**
  * Transaction API — exposed to PSP apps (banks/wallets).
@@ -36,6 +40,8 @@ public class TransactionController {
     private final PspValidationService pspService;
     private final TransactionRepository transactionRepository;
     private final BalanceEnquiryService balanceEnquiryService;
+    private final TransactionSearchService searchService;
+    private final TransactionReceiptService receiptService;
 
     /**
      * Initiate a P2P or P2M payment.
@@ -160,6 +166,68 @@ public class TransactionController {
                 .build();
 
         TransactionResponse response = orchestrator.initiatePayment(refundRequest);
+        return ResponseEntity.status(response.isSuccess() ? 200 : 402).body(response);
+    }
+
+    /**
+     * Unified transaction search with multiple filter criteria.
+     */
+    @GetMapping("/search")
+    @Operation(summary = "Search transactions", description = "Search transactions by VPA, status, date range, RRN, or UPI Txn ID")
+    public ResponseEntity<Map<String, Object>> search(
+            @RequestParam(required = false) String vpa,
+            @RequestParam(required = false) TransactionStatus status,
+            @RequestParam(required = false) String rrn,
+            @RequestParam(required = false) String upiTxnId,
+            @RequestParam(required = false) LocalDate dateFrom,
+            @RequestParam(required = false) LocalDate dateTo,
+            @RequestParam(required = false) Long amountMin,
+            @RequestParam(required = false) Long amountMax,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(searchService.search(vpa, status, rrn, upiTxnId, dateFrom, dateTo, amountMin, amountMax, page, size));
+    }
+
+    /**
+     * Generate transaction receipt.
+     */
+    @GetMapping("/{upiTxnId}/receipt")
+    @Operation(summary = "Get receipt", description = "Generate a transaction receipt for completed transactions")
+    public ResponseEntity<Map<String, Object>> getReceipt(
+            @PathVariable String upiTxnId) {
+        return ResponseEntity.ok(receiptService.generateReceipt(upiTxnId));
+    }
+
+    /**
+     * Retry a failed transaction.
+     */
+    @PostMapping("/{upiTxnId}/retry")
+    @Operation(summary = "Retry transaction", description = "Retry a failed transaction with same parameters")
+    public ResponseEntity<TransactionResponse> retry(
+            @PathVariable String upiTxnId,
+            @RequestHeader(value = "X-PSP-ID", required = false) String pspId,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+
+        Transaction original = transactionRepository.findByUpiTxnId(upiTxnId)
+                .orElseThrow(() -> new IllegalArgumentException("Transaction not found: " + upiTxnId));
+
+        if (original.getStatus() != TransactionStatus.DEBIT_FAILED &&
+            original.getStatus() != TransactionStatus.CREDIT_FAILED &&
+            original.getStatus() != TransactionStatus.EXPIRED) {
+            throw new IllegalStateException("Can only retry FAILED or EXPIRED transactions. Current: " + original.getStatus());
+        }
+
+        PaymentRequest retryRequest = PaymentRequest.builder()
+                .payerVpa(original.getPayerVpa())
+                .payeeVpa(original.getPayeeVpa())
+                .amount(original.getAmount())
+                .note(original.getNote())
+                .idempotencyKey("RETRY-" + upiTxnId + "-" + System.currentTimeMillis())
+                .pspId(pspId)
+                .ipAddress(httpRequest.getRemoteAddr())
+                .build();
+
+        TransactionResponse response = orchestrator.initiatePayment(retryRequest);
         return ResponseEntity.status(response.isSuccess() ? 200 : 402).body(response);
     }
 }
