@@ -83,9 +83,6 @@ dependencies {
     implementation 'io.github.resilience4j:resilience4j-bulkhead:2.2.0'
     implementation 'io.github.resilience4j:resilience4j-micrometer:2.2.0'
 
-    // Flyway PostgreSQL support
-    runtimeOnly 'org.flywaydb:flyway-database-postgresql:10.8.1'
-
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.kafka:spring-kafka-test'

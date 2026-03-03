@@ -11,8 +11,11 @@
 -- Create partitioned archive table (if transactions exceed 10M rows, 
 -- migrate to this structure)
 CREATE TABLE IF NOT EXISTS transactions_partitioned (
-    LIKE transactions INCLUDING ALL
+    LIKE transactions INCLUDING DEFAULTS INCLUDING GENERATED
 ) PARTITION BY RANGE (initiated_at);
+
+-- Composite PK must include partition column for partitioned tables
+ALTER TABLE transactions_partitioned ADD PRIMARY KEY (id, initiated_at);
 
 -- Create monthly partitions (12 months ahead)
 CREATE TABLE IF NOT EXISTS transactions_y2025_m01 PARTITION OF transactions_partitioned
@@ -52,8 +55,11 @@ CREATE TABLE IF NOT EXISTS transactions_y2026_m03 PARTITION OF transactions_part
 -- 2. Audit Log Partitioning (by month)
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS transaction_audit_log_partitioned (
-    LIKE transaction_audit_log INCLUDING ALL
+    LIKE transaction_audit_log INCLUDING DEFAULTS INCLUDING GENERATED
 ) PARTITION BY RANGE (changed_at);
+
+-- Composite PK must include partition column for partitioned tables
+ALTER TABLE transaction_audit_log_partitioned ADD PRIMARY KEY (id, changed_at);
 
 CREATE TABLE IF NOT EXISTS audit_log_y2025_m01 PARTITION OF transaction_audit_log_partitioned
     FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');

@@ -12,6 +12,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token VARCHAR(500);
 
+-- ── 1b. BankAccount entity new fields ──
+ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+
 -- ── 2. Chargeback table ──
 CREATE TABLE IF NOT EXISTS chargebacks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
