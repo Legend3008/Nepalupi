@@ -2,6 +2,8 @@ package np.com.nepalupi.repository;
 
 import np.com.nepalupi.domain.entity.Transaction;
 import np.com.nepalupi.domain.enums.TransactionStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -53,4 +55,17 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
     @Query("SELECT COUNT(t) FROM Transaction t WHERE t.createdAt < :before")
     long countByCreatedAtBefore(@Param("before") Instant before);
+
+    // Section 15.5: Paginated queries
+    Page<Transaction> findByPayerVpaOrderByInitiatedAtDesc(String payerVpa, Pageable pageable);
+
+    Page<Transaction> findByPayeeVpaOrderByInitiatedAtDesc(String payeeVpa, Pageable pageable);
+
+    @Query("SELECT t FROM Transaction t WHERE (t.payerVpa = :vpa OR t.payeeVpa = :vpa) ORDER BY t.initiatedAt DESC")
+    Page<Transaction> findByVpa(@Param("vpa") String vpa, Pageable pageable);
+
+    Page<Transaction> findByStatus(TransactionStatus status, Pageable pageable);
+
+    @Query("SELECT t FROM Transaction t WHERE t.initiatedAt BETWEEN :from AND :to ORDER BY t.initiatedAt DESC")
+    Page<Transaction> findByDateRange(@Param("from") Instant from, @Param("to") Instant to, Pageable pageable);
 }
